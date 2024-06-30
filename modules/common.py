@@ -1,0 +1,125 @@
+import jax
+import jax.numpy as jnp
+import jax.random as random
+import numpyro
+from numpyro.infer import NUTS, MCMC, Predictive
+
+
+# numpyro.set_host_device_count(4)
+# numpyro.set_platform("cpu")
+# numpyro.enable_x64()
+
+
+# squared euclidean distance
+def sqeuclidean_distance(x, y):
+    return jnp.sum((x - y) ** 2)
+
+# distance matrix
+def cross_covariance(func, x, y):
+    """distance matrix"""
+    return jax.vmap(lambda x1: jax.vmap(lambda y1: func(x1, y1))(y))(x)
+
+def SE_kernel(X, Y, var, length, noise, jitter=1.0e-6, include_noise=True):
+    # distance formula
+    deltaXsq = cross_covariance(
+        sqeuclidean_distance, X / length, Y / length
+    )
+
+    assert deltaXsq.shape == (X.shape[0], Y.shape[0])
+
+    # rbf function
+    K = var * jnp.exp(-0.5 * deltaXsq)
+    if include_noise:
+        K += (noise + jitter) * jnp.eye(X.shape[0])
+    return K
+
+vmap_SE_kernel = jax.vmap(SE_kernel, in_axes=(None, None, 0, 0, 0))
+
+def predict_with_mean(
+    rng_key,
+    X,
+    Y,
+    X_test,
+    var,
+    length,
+    noise,
+    kernel_func=SE_kernel,
+    mean_func=lambda x: jnp.zeros(x.shape[0]),
+):
+    # compute kernels between train and test data, etc.
+    k_pp = kernel_func(X_test, X_test, var, length, noise, include_noise=True)
+    k_pX = kernel_func(X_test, X, var, length, noise, include_noise=False)
+    k_XX = kernel_func(X, X, var, length, noise, include_noise=True)
+    K_xx_cho = jax.scipy.linalg.cho_factor(k_XX)
+    K = k_pp - jnp.matmul(
+        k_pX, jax.scipy.linalg.cho_solve(K_xx_cho, jnp.transpose(k_pX))
+    )
+    sigma_noise = jnp.sqrt(jnp.clip(jnp.diag(K), a_min=0.0)) * jax.random.normal(
+        rng_key, X_test.shape[:1]
+    )
+    mean = mean_func(X_test) + jnp.matmul(
+        k_pX, jax.scipy.linalg.cho_solve(K_xx_cho, Y - mean_func(X))
+    )
+    return mean, jnp.sqrt(jnp.diag(K))
+
+vmapped_pred_with_mean = jax.vmap(
+    predict_with_mean, in_axes=(None, None, 0, None, 0, 0, 0, None, None)
+)
+
+vmapped_pred_with_mean = jax.vmap(
+    vmapped_pred_with_mean,
+    in_axes=(None, None, 1, None, 1, 1, 1, None, None),
+)
+
+def train_stacking(model, X_val, mu_preds_val, std_preds_val, y_val):
+    mcmc = MCMC(
+        NUTS(model, 
+            init_strategy=numpyro.infer.initialization.init_to_median,
+        ),
+        num_warmup=100,
+        num_samples=100,
+        num_chains=4,
+        progress_bar=False,
+        chain_method="sequential",
+        # chain_method='parallel',
+    )
+
+    mcmc.run(random.PRNGKey(0), 
+             X_val,   
+             mu_preds_val, 
+             std_preds_val, 
+             y_val=y_val, 
+    )
+    # mcmc.print_summary()
+    samples = mcmc.get_samples()
+
+    return samples
+
+def predict_stacking(model, samples, X_val, X_test, mu_preds_test, std_preds_test, y_test, prior_mean = lambda x: jnp.zeros(x.shape[0])):
+    res = vmapped_pred_with_mean(
+        random.PRNGKey(0),
+        X_val,
+        samples["w_un"],
+        X_test, # TEST DATA
+        samples["kernel_var"],
+        samples["kernel_length"],
+        samples["kernel_noise"],
+        SE_kernel,
+        prior_mean,
+    )
+
+    w_un_samples = jnp.asarray(res[0])
+    pred_samples = {"w_un": jnp.transpose(w_un_samples, (1, 0, 2))}
+
+    predictive = Predictive(model, pred_samples)
+    pred_samples = predictive(
+        random.PRNGKey(0),
+        X=X_test, # TEST DATA
+        mu_preds=mu_preds_test,  # TEST DATA
+        std_preds=std_preds_test, # TEST DATA
+        y_val = y_test, # TEST DATA
+    )
+
+    lpd_test = jax.nn.logsumexp(pred_samples["lpd_point"], axis=0) - jnp.log(pred_samples["lpd_point"].shape[0])
+
+    return pred_samples, lpd_test

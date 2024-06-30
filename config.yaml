@@ -1,0 +1,39 @@
+datasets:
+  - name: yacht
+    splits: 10
+  - name: autompg
+    splits: 10
+  - name: concreteslump
+    splits: 10
+  - name: 'energy'
+    splits: 10
+  - name: 'forest'
+    splits: 10
+  - name: 'stock'
+    splits: 10
+  - name: 'autos'
+    splits: 10
+  - name: 'breastcancer'
+    splits: 10
+  - name: 'fertility'
+    splits: 10
+  - name: 'housing'
+    splits: 10
+  - name: 'machine'
+    splits: 10
+  - name: 'pendulum'
+    splits: 10
+  - name: 'servo'  
+    splits: 10
+  - name: concrete
+    splits: 10
+  - name: airfoil
+    splits: 10  
+
+parameters:
+  num_experts: [2, 4, 6]
+  points_per_split: [2, 5, 10]
+fixed:
+  kappa: 2   # suggested [2,100]
+  lambdaa: 1 # suggested [1,10]
+
