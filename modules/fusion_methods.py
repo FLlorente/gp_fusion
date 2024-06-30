@@ -11,32 +11,13 @@ def compute_neg_log_like(mus, stds, y_test):
         negloglik[:, i] = -1.0 * scipy.stats.norm.logpdf(y_test, mus[:, i], stds[:, i])
     return negloglik.mean(0)
 
-def product_fusion(mus, stds, splits, kappa):
+def product_fusion(mus, stds, stds_prior):
     prec_fused = np.zeros((mus.shape[0], 1))
     mean_fused = np.zeros((mus.shape[0], 1))
     w_gpoe = np.zeros(mus.shape)
-
-    # To compute the weights, we need to know the prior predictive variance of the experts
-    if isinstance(splits, list):
-        # Check if the elements of the list are arrays
-        if all(isinstance(item, np.ndarray) for (_,item) in splits):
-            # print("every expert uses its own prior variance")
-            n = len(splits)
-            noise = np.zeros(n)
-            variance = np.zeros(n)
-            for i,(_,y_train) in enumerate(splits):
-                # Perform computation on each array
-                noise[i] = np.var(y_train) / kappa**2
-                variance[i] = np.var(y_train)
-    elif isinstance(splits, np.ndarray):
-        y_train = splits
-        # print("all experts use the same prior variance")
-        noise = np.var(y_train) / kappa**2
-        variance = np.var(y_train)
             
-    
     for n in range(mus.shape[0]):
-        weights = 0.5 * (np.log(noise + variance) - np.log(stds[n, :]**2))  # 0.5(log(sig2prior) - log(sig2post))
+        weights = 0.5 * (np.log(stds_prior[n,:]**2) - np.log(stds[n, :]**2))  # 0.5(log(sig2prior) - log(sig2post))
         weights = weights / np.sum(weights)
 
         precs = 1 / stds[n, :]**2

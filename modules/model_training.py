@@ -8,10 +8,9 @@ class ExactGPModel(gpytorch.models.ExactGP):
         self.mean_module = gpytorch.means.ConstantMean()
         self.covar_module = gpytorch.kernels.ScaleKernel(
             gpytorch.kernels.RBFKernel(ard_num_dims=train_x.shape[1], 
-                                       lengthscale_prior=gpytorch.priors.GammaPrior(1, 1),
+                                    #    lengthscale_prior=gpytorch.priors.GammaPrior(1, 1),
                                        ),
-            outputscale_prior=gpytorch.priors.GammaPrior(1, 2)
-            
+            # outputscale_prior=gpytorch.priors.GammaPrior(1, 2)          
         )
 
     def forward(self, x):
@@ -107,15 +106,19 @@ def predict_with_expert(model, likelihood, X):
     X_torch = torch.from_numpy(X).type(torch.float32)
     with torch.no_grad(), gpytorch.settings.fast_pred_var():
         preds = likelihood(model(X_torch))
-    return preds.mean.numpy(), np.sqrt(preds.variance.numpy())
+        preds_prior = likelihood(model.forward(X_torch))  # we also compute the prior predictive variances at X_test
+    return preds.mean.numpy(), np.sqrt(preds.variance.numpy()), np.sqrt(preds_prior.variance.numpy())
 
 def store_predictions_for_experts(experts, X):
     mu_preds = []
     std_preds = []
+    std_preds_prior = []   # we also store the prior predictive variances of each expert for computing the entropy change in gpoe
     for model, likelihood in experts:
-        mu, std = predict_with_expert(model, likelihood, X)
+        mu, std, std_prior = predict_with_expert(model, likelihood, X)
         mu_preds.append(mu)
         std_preds.append(std)
+        std_preds_prior.append(std_prior)   
     mu_preds = np.stack(mu_preds, axis=-1)
     std_preds = np.stack(std_preds, axis=-1)
-    return mu_preds, std_preds
+    std_preds_prior = np.stack(std_preds_prior, axis=-1)  
+    return mu_preds, std_preds, std_preds_prior  

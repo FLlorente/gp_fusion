@@ -7,16 +7,16 @@ datasets:
     splits: 10
   - name: 'energy'
     splits: 10
-  - name: 'forest'
-    splits: 10
-  - name: 'stock'
-    splits: 10
-  - name: 'autos'
-    splits: 10
-  - name: 'breastcancer'
-    splits: 10
-  - name: 'fertility'
-    splits: 10
+  # - name: 'forest'
+  #   splits: 10
+  # - name: 'stock'
+  #   splits: 10
+  # - name: 'autos'
+  #   splits: 10
+  # - name: 'breastcancer'
+  #   splits: 10
+  # - name: 'fertility'
+  #   splits: 10
   - name: 'housing'
     splits: 10
   - name: 'machine'
