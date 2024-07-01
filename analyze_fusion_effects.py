@@ -63,8 +63,8 @@ file_path = 'experiment_results_parallel.csv'  # Update this path if necessary
 df = pd.read_csv(file_path)
 
 # Exclude specific datasets
-exclude_datasets = ['forest', 'fertility', 'pendulum']
-df = df[~df['dataset'].isin(exclude_datasets)]
+# exclude_datasets = ['forest', 'fertility', 'pendulum']
+# df = df[~df['dataset'].isin(exclude_datasets)]
 
 # Melt the dataframe to have a long-form dataset suitable for analysis
 df_melted = df.melt(id_vars=['dataset', 'split', 'num_experts', 'points_per_split'],

@@ -41,8 +41,8 @@ def analyze_results(filename, exclude_points_per_split=None):
         g.figure.suptitle(f'Comparison of NLPD Across Methods, Number of Experts, and Points per Split for {dataset} Dataset')
         
         # Save the plot for each dataset
-        # plt.savefig(f'comparison_nlpd_{dataset}.png')
-        plt.show()
+        plt.savefig(f'comparison_nlpd_{dataset}.png')
+        # plt.show()
 
 if __name__ == '__main__':
     # analyze_results('experiment_results.csv', exclude_points_per_split=[20])

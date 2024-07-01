@@ -1,0 +1,11 @@
+
+/usr/local/bin/python3 pogpe_and_mogpe.py -M 2 -S 150 -i 0 -D 'pendulum' 
+/usr/local/bin/python3 pogpe_and_mogpe.py -M 2 -S 150 -i 1 -D 'pendulum' 
+/usr/local/bin/python3 pogpe_and_mogpe.py -M 2 -S 150 -i 2 -D 'pendulum' 
+/usr/local/bin/python3 pogpe_and_mogpe.py -M 2 -S 150 -i 3 -D 'pendulum' 
+/usr/local/bin/python3 pogpe_and_mogpe.py -M 2 -S 150 -i 4 -D 'pendulum' 
+/usr/local/bin/python3 pogpe_and_mogpe.py -M 2 -S 150 -i 5 -D 'pendulum' 
+/usr/local/bin/python3 pogpe_and_mogpe.py -M 2 -S 150 -i 6 -D 'pendulum' 
+/usr/local/bin/python3 pogpe_and_mogpe.py -M 2 -S 150 -i 7 -D 'pendulum' 
+/usr/local/bin/python3 pogpe_and_mogpe.py -M 2 -S 150 -i 8 -D 'pendulum' 
+/usr/local/bin/python3 pogpe_and_mogpe.py -M 2 -S 150 -i 9 -D 'pendulum' 

@@ -46,21 +46,20 @@ def run_single_experiment(dataset, split, num_experts, points_per_split, fixed_p
             experts.append((model, likelihood))
 
         # Store predictions for experts on the test set
-        mu_preds_test, std_preds_test = store_predictions_for_experts(experts, X_test)
+        mu_preds_test, std_preds_test, std_preds_prior_test = store_predictions_for_experts(experts, X_test)
 
         # Compute negative log likelihood for experts
         nlpd_experts = compute_neg_log_like(mu_preds_test, std_preds_test, y_test)
 
         # Compute GPOE
-        # mus_gpoe, stds_gpoe, w_gpoe = product_fusion(mu_preds_test, std_preds_test, y_train, fixed_params['kappa'])
-        mus_gpoe, stds_gpoe, w_gpoe = product_fusion(mu_preds_test, std_preds_test, splits, fixed_params['kappa'])
+        mus_gpoe, stds_gpoe, w_gpoe = product_fusion(mu_preds_test, std_preds_test, std_preds_prior_test)
         nlpd_gpoe = compute_neg_log_like(mus_gpoe, stds_gpoe, y_test)
 
         # Create validation set
         X_val, y_val = create_validation_set(splits, points_per_split)
 
         # Store predictions for experts on the validation set
-        mu_preds_val, std_preds_val = store_predictions_for_experts(experts, X_val)
+        mu_preds_val, std_preds_val, _ = store_predictions_for_experts(experts, X_val) # we don't need the prior predictive variances here...
 
         # PHS training and prediction
         preds_phs, lpd_phs_test = train_and_predict_fusion_method(
