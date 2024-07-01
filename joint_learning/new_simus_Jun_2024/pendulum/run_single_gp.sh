@@ -1,0 +1,21 @@
+# /usr/local/bin/python3 single_gp.py -i 0 -D 'yacht'
+# /usr/local/bin/python3 single_gp.py -i 2 -D 'yacht' 
+# /usr/local/bin/python3 single_gp.py -i 3 -D 'yacht' 
+# /usr/local/bin/python3 single_gp.py -i 4 -D 'yacht' 
+# /usr/local/bin/python3 single_gp.py -i 5 -D 'yacht' 
+# /usr/local/bin/python3 single_gp.py -i 6 -D 'yacht' 
+# /usr/local/bin/python3 single_gp.py -i 7 -D 'yacht' 
+# /usr/local/bin/python3 single_gp.py -i 8 -D 'yacht' 
+# /usr/local/bin/python3 single_gp.py -i 9 -D 'yacht' 
+
+
+
+/usr/local/bin/python3 single_gp.py -i 0 -D 'pendulum'
+/usr/local/bin/python3 single_gp.py -i 2 -D 'pendulum' 
+/usr/local/bin/python3 single_gp.py -i 3 -D 'pendulum' 
+/usr/local/bin/python3 single_gp.py -i 4 -D 'pendulum' 
+/usr/local/bin/python3 single_gp.py -i 5 -D 'pendulum' 
+/usr/local/bin/python3 single_gp.py -i 6 -D 'pendulum' 
+/usr/local/bin/python3 single_gp.py -i 7 -D 'pendulum' 
+/usr/local/bin/python3 single_gp.py -i 8 -D 'pendulum' 
+/usr/local/bin/python3 single_gp.py -i 9 -D 'pendulum' 

@@ -1,0 +1,8 @@
+/usr/local/bin/python3 pogpe_mcmc_svi.py -M 2 -S 50 -i 2 -D 'yacht' 
+/usr/local/bin/python3 pogpe_mcmc_svi.py -M 2 -S 50 -i 3 -D 'yacht' 
+/usr/local/bin/python3 pogpe_mcmc_svi.py -M 2 -S 50 -i 4 -D 'yacht' 
+/usr/local/bin/python3 pogpe_mcmc_svi.py -M 2 -S 50 -i 5 -D 'yacht' 
+/usr/local/bin/python3 pogpe_mcmc_svi.py -M 2 -S 50 -i 6 -D 'yacht' 
+/usr/local/bin/python3 pogpe_mcmc_svi.py -M 2 -S 50 -i 7 -D 'yacht' 
+/usr/local/bin/python3 pogpe_mcmc_svi.py -M 2 -S 50 -i 8 -D 'yacht' 
+/usr/local/bin/python3 pogpe_mcmc_svi.py -M 2 -S 50 -i 9 -D 'yacht' 
