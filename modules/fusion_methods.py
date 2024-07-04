@@ -11,34 +11,67 @@ def compute_neg_log_like(mus, stds, y_test):
         negloglik[:, i] = -1.0 * scipy.stats.norm.logpdf(y_test, mus[:, i], stds[:, i])
     return negloglik.mean(0)
 
-def product_fusion(mus, stds, stds_prior=None, weighting="entropy", temperature = 15):
-    # mus        is n_test x n_experts
-    # stds       is n_test x n_experts
-    # stds_prior is n_test x n_experts
-    prec_fused = np.zeros((mus.shape[0], 1))
-    mean_fused = np.zeros((mus.shape[0], 1))
-    w = np.zeros(mus.shape)
-            
-    for n in range(mus.shape[0]):
-        if weighting=="entropy":
-            weights = 0.5 * (np.log(stds_prior[n,:]**2) - np.log(stds[n, :]**2))  # 0.5(log(sig2prior) - log(sig2post))
-            weights = weights / np.sum(weights)
-        elif weighting == "uniform":
-            weights = np.ones((mus.shape[1],))/(1.0*mus.shape[1])
-            weights = weights / np.sum(weights)
-        elif weighting == "variance":
-            weights = np.exp(-temperature*stds[n,:]**2)
-            weights = weights / np.sum(weights)
+
+def normalize_weights(weights):
+    return weights / np.sum(weights, axis=1, keepdims=True)
+
+def product_fusion(mus, stds, stds_prior=None, 
+                   weighting="entropy", method="gPoE", 
+                   normalize=True,softmax=False, power=15):
+    # mus        is num_test x num_experts
+    # stds       is num_test x num_experts
+    # stds_prior is num_test x num_experts
+
+    # Number of experts
+    M = mus.shape[1]
+
+    # Compute the weights matrix
+    if weighting == "entropy":
+        weights = 0.5 * (np.log(stds_prior**2) - np.log(stds**2))  
+        if softmax:
+            weights = np.exp(power * weights)
+    elif weighting == "uniform":
+        weights = np.ones_like(mus) / M
+    elif weighting == "variance":
+        weights = np.exp(-power * stds**2)
+    elif weighting == "no-weights":
+        weights = np.ones_like(mus)
         
-        precs = 1 / stds[n, :]**2
 
-        prec_fused[n, :] = weights @ precs
-        mean_fused[n, :] = weights @ (mus[n, :] * precs) / prec_fused[n, :]
+    # Normalize the weights if required
+    if normalize:
+        weights = normalize_weights(weights)
 
-        w[n, :] = weights
+    # Compute precisions
+    precs = 1 / stds**2
 
-    return mean_fused, 1 / np.sqrt(prec_fused), w
+    # Compute fused precision and mean based on the method
+    if method == "PoE":
+        prec_fused = np.sum(precs, axis=1, keepdims=True)  # Sum over experts
 
+    elif method == "gPoE":
+        prec_fused = np.sum(weights * precs, axis=1, keepdims=True)  # Weighted sum over experts
+
+    elif method == "BCM":
+        prior_var = stds_prior[0, 0]**2 # Prior variance
+        prec_fused = np.sum(precs, axis=1, keepdims=True) + (1 - M) / prior_var  # Sum plus correction
+
+    elif method == "rBCM":
+        prior_var = stds_prior[0, 0]**2 # Prior variance
+        prec_fused = np.sum(weights * precs, axis=1, keepdims=True) + (1 - np.sum(weights, axis=1, keepdims=True)) / prior_var  # Weighted sum plus correction
+
+    elif method == "bar":
+        var_fused = np.sum(weights * stds**2, axis=1, keepdims=True)  # Weighted average of variances
+        mean_fused = np.sum(weights * mus, axis=1, keepdims=True)  # Weighted average of means
+        return mean_fused, np.sqrt(var_fused), weights
+
+    else:
+        raise ValueError(f"Unknown method: {method}")
+
+    # Compute fused mean
+    mean_fused = np.sum(weights * mus * precs, axis=1, keepdims=True) / prec_fused
+
+    return mean_fused, 1 / np.sqrt(prec_fused), weights
 
 def train_and_predict_fusion_method(model, X_val, mu_preds_val, std_preds_val, y_val, X_test, mu_preds_test, std_preds_test, y_test):
     # Train the fusion model

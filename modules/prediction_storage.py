@@ -1,6 +1,7 @@
 import numpy as np
 from .model_training import train_and_predict_single_gp
 
+# Use predict_with_expert and store_predictions_for_experts in model_training.py better!
 def store_predictions(splits, X_val, X_test, kappa, lambdaa):
     mu_preds_val = np.zeros((X_val.shape[0], len(splits)))
     std_preds_val = np.zeros((X_val.shape[0], len(splits)))

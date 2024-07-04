@@ -90,7 +90,7 @@ def phs_with_normalized_w(X, mu_preds, std_preds, y_val=None):
     ################################################
     # Fuse with generalized multiplicative pooling #
     ################################################
-    w = numpyro.deterministic("w", jax.nn.softmax(log_w, axis=1))
+    w = numpyro.deterministic("w", jax.nn.softmax(log_w, axis=0))
 
     tau_fused = numpyro.deterministic(
         "tau_fused", jnp.einsum("nm,mn->n", tau_preds, w)

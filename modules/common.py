@@ -5,10 +5,6 @@ import numpyro
 from numpyro.infer import NUTS, MCMC, Predictive
 
 
-# numpyro.set_host_device_count(4)
-# numpyro.set_platform("cpu")
-# numpyro.enable_x64()
-
 
 # squared euclidean distance
 def sqeuclidean_distance(x, y):
@@ -71,7 +67,18 @@ vmapped_pred_with_mean = jax.vmap(
     in_axes=(None, None, 1, None, 1, 1, 1, None, None),
 )
 
-def train_stacking(model, X_val, mu_preds_val, std_preds_val, y_val):
+def train_stacking(model, X_val, mu_preds_val, std_preds_val, y_val, 
+                   parallel=False, show_progress=False,show_summary=False):
+
+    if parallel:
+        numpyro.set_host_device_count(4)
+        numpyro.set_platform("cpu")
+        numpyro.enable_x64()
+
+        chain_method = "parallel"
+    else:
+        chain_method = "sequential"
+
     mcmc = MCMC(
         NUTS(model, 
             init_strategy=numpyro.infer.initialization.init_to_median,
@@ -79,9 +86,8 @@ def train_stacking(model, X_val, mu_preds_val, std_preds_val, y_val):
         num_warmup=100,
         num_samples=100,
         num_chains=4,
-        progress_bar=False,
-        chain_method="sequential",
-        # chain_method='parallel',
+        progress_bar=show_progress,
+        chain_method=chain_method,
     )
 
     mcmc.run(random.PRNGKey(0), 
@@ -90,7 +96,9 @@ def train_stacking(model, X_val, mu_preds_val, std_preds_val, y_val):
              std_preds_val, 
              y_val=y_val, 
     )
-    # mcmc.print_summary()
+    
+    if show_summary:
+        mcmc.print_summary()
     samples = mcmc.get_samples()
 
     return samples
