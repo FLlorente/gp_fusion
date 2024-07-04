@@ -17,8 +17,23 @@ class ExactGPModel(gpytorch.models.ExactGP):
         mean_x = self.mean_module(x)
         covar_x = self.covar_module(x)
         return gpytorch.distributions.MultivariateNormal(mean_x, covar_x)
+    
 
-def train_and_predict_single_gp(X_train, y_train, X_test, X_val, kappa, lambdaa):
+
+class SharedKernelGPModel(gpytorch.models.ExactGP):
+    def __init__(self, train_x, train_y, likelihood, kernel):
+        super(SharedKernelGPModel, self).__init__(train_x, train_y, likelihood)
+        self.mean_module = gpytorch.means.ConstantMean()
+        self.covar_module = kernel
+    
+    def forward(self, x):
+        mean_x = self.mean_module(x)
+        covar_x = self.covar_module(x)
+        return gpytorch.distributions.MultivariateNormal(mean_x, covar_x)
+
+
+def train_and_predict_single_gp(X_train, y_train, X_test, X_val, kappa, lambdaa,
+                                training_iter = 100, lr = 0.1):
     torch.manual_seed(0)
 
     Xtrain_torch = torch.from_numpy(X_train).type(torch.float32)
@@ -41,11 +56,11 @@ def train_and_predict_single_gp(X_train, y_train, X_test, X_val, kappa, lambdaa)
 
     model_gpy.initialize(**hypers)
 
-    training_iter = 100
+    training_iter = training_iter
     model_gpy.train()
     likelihood.train()
 
-    optimizer = torch.optim.Adam(model_gpy.parameters(), lr=0.1)
+    optimizer = torch.optim.Adam(model_gpy.parameters(), lr=lr)
     mll = gpytorch.mlls.ExactMarginalLogLikelihood(likelihood, model_gpy)
 
     for i in range(training_iter):
@@ -64,7 +79,7 @@ def train_and_predict_single_gp(X_train, y_train, X_test, X_val, kappa, lambdaa)
 
     return test_preds, val_preds
 
-def train_expert(X_train, y_train, kappa, lambdaa):
+def train_expert(X_train, y_train, kappa, lambdaa,training_iter=100, lr=0.1):
     torch.manual_seed(0)
 
     Xtrain_torch = torch.from_numpy(X_train).type(torch.float32)
@@ -83,11 +98,11 @@ def train_expert(X_train, y_train, kappa, lambdaa):
     }
     model_gpy.initialize(**hypers)
 
-    training_iter = 100
+    training_iter = training_iter
     model_gpy.train()
     likelihood.train()
 
-    optimizer = torch.optim.Adam(model_gpy.parameters(), lr=0.1)
+    optimizer = torch.optim.Adam(model_gpy.parameters(), lr=lr)
     mll = gpytorch.mlls.ExactMarginalLogLikelihood(likelihood, model_gpy)
 
     for _ in range(training_iter):
@@ -122,3 +137,65 @@ def store_predictions_for_experts(experts, X):
     std_preds = np.stack(std_preds, axis=-1)
     std_preds_prior = np.stack(std_preds_prior, axis=-1)  
     return mu_preds, std_preds, std_preds_prior  
+
+
+
+# Function for joint training of experts with shared kernel
+def train_joint_experts_shared_kernel(expert_datasets, kappa, lambdaa,
+                                      training_iter=100, lr=0.1):
+    torch.manual_seed(0)
+
+    shared_kernel = gpytorch.kernels.ScaleKernel(gpytorch.kernels.RBFKernel(ard_num_dims=expert_datasets[0][0].shape[1]))
+    likelihood = gpytorch.likelihoods.GaussianLikelihood()
+
+    models = [SharedKernelGPModel(torch.from_numpy(X).type(torch.float32), 
+                                  torch.from_numpy(y).type(torch.float32).squeeze(-1), 
+                                  likelihood, 
+                                  shared_kernel) for X, y in expert_datasets]
+
+    # Set initial hyperparameters
+    X_train = np.concatenate([X for X, y in expert_datasets], axis=0)
+    y_train = np.concatenate([y for X, y in expert_datasets], axis=0)
+    
+    hypers = {
+        'base_kernel.lengthscale': torch.from_numpy(np.std(X_train, axis=0) / lambdaa),
+        'outputscale': torch.tensor(1.0 * y_train.var())
+    }
+    shared_kernel.initialize(**hypers)
+    likelihood.initialize(noise=torch.tensor(1.0 * y_train.var() / kappa ** 2))
+    
+    for model in models:
+        model.mean_module.initialize(constant=y_train.mean()) # it's not included in the optimization
+
+    # Training loop
+    training_iter = training_iter
+    for model in models:
+        model.train()
+    likelihood.train()
+
+    optimizer = torch.optim.Adam([
+        {'params': shared_kernel.parameters()},  # Shared kernel parameters
+        {'params': likelihood.parameters()},  # Likelihood parameters
+    ], lr=lr)
+
+    for _ in range(training_iter):
+        optimizer.zero_grad()
+        total_loss = 0 # Initialize total loss as a scalar
+        for model in models:
+            train_x = model.train_inputs[0]
+            train_y = model.train_targets
+
+            mll = gpytorch.mlls.ExactMarginalLogLikelihood(likelihood, model)
+            output = model(train_x)
+            loss = -mll(output, train_y)
+            total_loss += loss
+
+        total_loss.backward()
+        optimizer.step()
+        optimizer.zero_grad()
+
+    for model in models:
+        model.eval()
+    likelihood.eval()
+
+    return models, likelihood

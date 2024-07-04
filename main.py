@@ -12,14 +12,15 @@ from modules.fusion_methods import compute_neg_log_like, product_fusion, train_s
 from modules.model_training import train_and_predict_single_gp, train_expert, store_predictions_for_experts
 from modules.phs import phs, phs_with_normalized_w
 from modules.bhs import bhs
+from modules.model_training import train_joint_experts_shared_kernel
 
 # Parameters
 dataset_name = 'concrete'  
 # dataset_name = 'yacht'  
 # dataset_name = 'elevators'
 split = 0
-n_experts = 2
-n_points_per_split = 2
+n_experts = 10
+n_points_per_split = 1
 kappa = 2    # noise = np.var(y_train)/kappa**2  ; kappa \in [2,100]
 lambdaa = 1   # lengthscale = np.std(X_train,1)/lambdaa ; lambdaa \in [1,10]
 
@@ -42,11 +43,20 @@ nlpd_single_gp = compute_neg_log_like(test_preds.mean.numpy().reshape(-1, 1),
 # # Store predictions  (OLD WAY... it doesn't work anymore)
 # mu_preds_val, std_preds_val, mu_preds_test, std_preds_test = store_predictions(splits, X_val, X_test, kappa, lambdaa)
 
-# Train experts and store models
-experts = []
-for X_split, y_split in splits:
-    model, likelihood = train_expert(X_split, y_split, kappa, lambdaa)
-    experts.append((model, likelihood))
+joint_training = False
+
+if joint_training:
+    # ====== for joint training ========== #
+    models, likelihood = train_joint_experts_shared_kernel(splits, kappa, lambdaa)
+    experts = [(model,likelihood) for model in models]
+    # ====== for independent training ==== #
+else:
+    experts = []
+    for X_split, y_split in splits:
+        model, likelihood = train_expert(X_split, y_split, kappa, lambdaa)
+        experts.append((model, likelihood))
+
+
 
 # Store predictions for experts on the test set
 mu_preds_test, std_preds_test, std_preds_prior_test = store_predictions_for_experts(experts, X_test)
@@ -88,7 +98,7 @@ samples_phs = train_stacking(
     std_preds_val=std_preds_val,
     y_val=y_val,
     # parallel = True,
-    show_progress=True,
+    # show_progress=True,
 )
 
 preds_phs, lpd_phs_test = predict_stacking(
