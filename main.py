@@ -16,13 +16,16 @@ from modules.model_training import train_joint_experts_shared_kernel
 
 # Parameters
 # dataset_name = 'concrete'  
-dataset_name = 'yacht'  
+# dataset_name = 'yacht'  
 # dataset_name = 'elevators'
-split = 0
-n_experts = 3
+dataset_name = "airfoil"
+split = 1
+n_experts = 5
 n_points_per_split = 1
 kappa = 2    # noise = np.var(y_train)/kappa**2  ; kappa \in [2,100]
 lambdaa = 1   # lengthscale = np.std(X_train,1)/lambdaa ; lambdaa \in [1,10]
+lr=0.01  # learning rate of adam optimizer for hyperparameter learning
+training_iter = 100
 
 # ------------ Load and normalize data --------- #
 X_train, y_train, X_test, y_test = load_and_normalize_data(dataset_name, split)
@@ -34,7 +37,9 @@ X_val, y_val = create_validation_set(splits, n_points_per_split)
 
 
 # ---------  Single GP using all training data ----- #
-test_preds, _ = train_and_predict_single_gp(X_train, y_train, X_test, X_val, kappa, lambdaa)
+test_preds, _ = train_and_predict_single_gp(X_train, y_train, X_test, X_val, kappa, lambdaa,
+                                            lr=lr,
+                                            training_iter=training_iter)
 nlpd_single_gp = compute_neg_log_like(test_preds.mean.numpy().reshape(-1, 1), 
                                       np.sqrt(test_preds.variance.numpy().reshape(-1, 1)), y_test)
 
@@ -48,14 +53,18 @@ joint_training = False
 if joint_training:
     print("Experts are trained jointly")
     # ====== for joint training ========== #
-    models, likelihood = train_joint_experts_shared_kernel(splits, kappa, lambdaa)
+    models, likelihood = train_joint_experts_shared_kernel(splits, kappa, lambdaa,
+                                                           lr=lr,
+                                                           training_iter=training_iter)
     experts = [(model,likelihood) for model in models]
     # ====== for independent training ==== #
 else:
     print("Experts are trained independently")
     experts = []
     for X_split, y_split in splits:
-        model, likelihood = train_expert(X_split, y_split, kappa, lambdaa)
+        model, likelihood = train_expert(X_split, y_split, kappa, lambdaa,
+                                         lr=lr,
+                                         training_iter=training_iter)
         experts.append((model, likelihood))
 
 
@@ -64,18 +73,11 @@ else:
 mu_preds_test, std_preds_test, std_preds_prior_test = store_predictions_for_experts(experts, X_test)
 
 
-print(std_preds_prior_test[:5,:])
-print(std_preds_test[:5,:])
+# print(std_preds_prior_test[:3,:])
+# print(std_preds_test[:3,:])
 
 # Compute negative log likelihood for experts
 nlpd_experts = compute_neg_log_like(mu_preds_test, std_preds_test, y_test)
-
-# Store predictions for experts on the validation set
-mu_preds_val, std_preds_val, _ = store_predictions_for_experts(experts, X_val) # we don't need the prior predictive variances here...
-
-# Compute negative log likelihood for experts
-nlpd_experts = compute_neg_log_like(mu_preds_test, std_preds_test, y_test)
-
 
 
 # ----------- Fusion using gpoe --------- #
@@ -84,7 +86,7 @@ nlpd_experts = compute_neg_log_like(mu_preds_test, std_preds_test, y_test)
 mus_gpoe, stds_gpoe, w_gpoe = product_fusion(mu_preds_test, std_preds_test, std_preds_prior_test,
                                              method="gPoE", 
                                              weighting="entropy",
-                                             normalize=False,
+                                             normalize=True,
                                              softmax=False)
 nlpd_gpoe = compute_neg_log_like(mus_gpoe, stds_gpoe, y_test)
 
@@ -95,12 +97,17 @@ mus_unif, stds_unif, w_unif = product_fusion(mu_preds_test, std_preds_test,
                                              normalize=True)
 nlpd_unif = compute_neg_log_like(mus_unif, stds_unif, y_test)
 
+
 # Output results
 print("NLPD Experts: ", nlpd_experts)
 print("NLPD Single GP: ", nlpd_single_gp)
 print("NLPD Entropy-GPOE: ", nlpd_gpoe)
 print("NLPD Unif-GPOE: ", nlpd_unif)
 
+
+
+# Store predictions for experts on the validation set
+mu_preds_val, std_preds_val, _ = store_predictions_for_experts(experts, X_val) # we don't need the prior predictive variances here...
 
 
 # ---------- PHS training and prediction --------- #

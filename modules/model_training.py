@@ -1,6 +1,15 @@
 import torch
 import gpytorch
+from torch.utils.data import TensorDataset, DataLoader
+from gpytorch.models import ApproximateGP
+from gpytorch.variational import VariationalStrategy, CholeskyVariationalDistribution
+from gpytorch.likelihoods import GaussianLikelihood
+from gpytorch.mlls import VariationalELBO
+from gpytorch.means import ConstantMean
+from gpytorch.kernels import ScaleKernel, RBFKernel
 import numpy as np
+
+
 
 def to_torch(x, dtype=torch.float32):
     return torch.from_numpy(x).type(dtype)
@@ -19,8 +28,11 @@ class GPModel(gpytorch.models.ExactGP):
         return gpytorch.distributions.MultivariateNormal(mean_x, covar_x)
 
 def initialize_hyperparameters(model, likelihood, X_train, y_train, kappa, lambdaa):
+    # Initialize likelihood noise parameter
+    likelihood.noise_covar.initialize(noise=torch.tensor(1.0 * y_train.var() / kappa ** 2))
+    
+    # Initialize model kernel and mean parameters
     hypers = {
-        'likelihood.noise_covar.noise': torch.tensor(1.0 * y_train.var() / kappa ** 2),
         'covar_module.base_kernel.lengthscale': torch.from_numpy(np.std(X_train, axis=0) / lambdaa),
         'covar_module.outputscale': torch.tensor(1.0 * y_train.var()),
         'mean_module.constant': torch.tensor(y_train.mean(), requires_grad=False)
@@ -30,6 +42,8 @@ def initialize_hyperparameters(model, likelihood, X_train, y_train, kappa, lambd
 def train_model(model, likelihood, X_train, y_train, training_iter=100, lr=0.1):
     model.train()
     likelihood.train()
+    import numpyro
+    # optimizer = numpyro.optim.Minimize(model.parameters())
     optimizer = torch.optim.Adam(model.parameters(), lr=lr)
     mll = gpytorch.mlls.ExactMarginalLogLikelihood(likelihood, model)
 
@@ -94,8 +108,8 @@ def train_joint_experts_shared_kernel(expert_datasets, kappa, lambdaa, kernel=No
     
     initialize_hyperparameters(models[0], likelihood, X_train, y_train, kappa, lambdaa)  # Initialize shared kernel and likelihood
 
-    for model in models:
-        model.mean_module.initialize(constant=y_train.mean())
+    # for model in models:
+    #     model.mean_module.initialize(constant=y_train.mean())
 
     optimizer = torch.optim.Adam([
         {'params': kernel.parameters()},  # Shared kernel parameters
@@ -121,3 +135,76 @@ def train_joint_experts_shared_kernel(expert_datasets, kappa, lambdaa, kernel=No
     likelihood.eval()
 
     return models, likelihood
+
+
+
+class VariationalGPModel(ApproximateGP):
+    def __init__(self, train_x, inducing_points, likelihood, kernel=None, mean=None):
+        variational_distribution = CholeskyVariationalDistribution(inducing_points.size(0))
+        variational_strategy = VariationalStrategy(self, inducing_points, variational_distribution, learn_inducing_locations=True)
+        super(VariationalGPModel, self).__init__(variational_strategy)
+        self.mean_module = mean or ConstantMean()
+        self.covar_module = kernel or ScaleKernel(RBFKernel(ard_num_dims=train_x.shape[1]))
+
+    def forward(self, x):
+        mean_x = self.mean_module(x)
+        covar_x = self.covar_module(x)
+        return gpytorch.distributions.MultivariateNormal(mean_x, covar_x)
+    
+
+def train_variational_gp(X_train, y_train, inducing_points, kappa, lambdaa, learning_rate=0.01, num_epochs=10, batch_size=128):
+    torch.manual_seed(0)
+    likelihood = GaussianLikelihood()
+    model = VariationalGPModel(to_torch(X_train), to_torch(inducing_points), likelihood)
+
+    initialize_hyperparameters(model, likelihood, X_train, y_train, kappa, lambdaa)
+    
+    model.train()
+    likelihood.train()
+    
+    optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
+    mll = VariationalELBO(likelihood, model, num_data=X_train.shape[0])
+    
+    # Create DataLoader for mini-batch training
+    train_dataset = TensorDataset(to_torch(X_train), to_torch(y_train).squeeze(-1))
+    train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
+    
+    # Calculate the number of batches
+    N = len(X_train)  # Total number of training samples
+    B = batch_size    # Batch size
+    num_batches = np.ceil(N / B)
+
+    print("total number of iterations (gradient updates) will be ",num_batches * num_epochs)
+
+    for i in range(num_epochs):
+        for X_batch, y_batch in train_loader:
+            optimizer.zero_grad()
+            output = model(X_batch)
+            loss = -mll(output, y_batch)
+            loss.backward()
+            optimizer.step()
+    
+    return model, likelihood  
+
+
+def predict_variational_gp(model, likelihood, X_test, batch_size=128):
+    model.eval()
+    likelihood.eval()
+
+    test_dataset = TensorDataset(to_torch(X_test))
+    test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False)
+    
+    means = []
+    variances = []
+    
+    with torch.no_grad(), gpytorch.settings.fast_pred_var():
+        for X_batch in test_loader:
+            X_batch = X_batch[0]  # Unpack the tuple
+            preds = likelihood(model(X_batch))
+            means.append(preds.mean.cpu().numpy())
+            variances.append(preds.variance.cpu().numpy())
+    
+    mean = np.concatenate(means, axis=0)
+    var = np.concatenate(variances, axis=0)
+    
+    return mean, np.sqrt(var)
