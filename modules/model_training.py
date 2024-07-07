@@ -1,3 +1,4 @@
+import gpytorch.constraints
 import torch
 import gpytorch
 from torch.utils.data import TensorDataset, DataLoader
@@ -29,7 +30,7 @@ class GPModel(gpytorch.models.ExactGP):
 
 def initialize_hyperparameters(model, likelihood, X_train, y_train, kappa, lambdaa):
     # Initialize likelihood noise parameter
-    likelihood.noise_covar.initialize(noise=torch.tensor(1.0 * y_train.var() / kappa ** 2))
+    likelihood.noise_covar.initialize(noise=torch.tensor(1.0 * y_train.var() / kappa**2))
     
     # Initialize model kernel and mean parameters
     hypers = {
@@ -75,7 +76,9 @@ def store_predictions_for_experts(experts, X):
 
 def train_and_predict_single_gp(X_train, y_train, X_test, X_val, kappa, lambdaa, kernel=None, mean=None, training_iter=100, lr=0.1):
     torch.manual_seed(0)
-    likelihood = gpytorch.likelihoods.GaussianLikelihood()
+    likelihood = gpytorch.likelihoods.GaussianLikelihood(
+        noise_constraint=gpytorch.constraints.GreaterThan(1e-4)
+        )
 
     model_gpy = GPModel(to_torch(X_train), to_torch(y_train).squeeze(-1), likelihood, kernel, mean)
     initialize_hyperparameters(model_gpy, likelihood, X_train, y_train, kappa, lambdaa)

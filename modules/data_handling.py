@@ -2,16 +2,28 @@ import numpy as np
 from sklearn.model_selection import train_test_split
 from uci_datasets import Dataset
 
-def load_and_normalize_data(dataset_name, split=0):
-    data = Dataset(dataset_name);
+def load_and_normalize_data(dataset_name, split=0, normalize_y = False):
+    data = Dataset(dataset_name,print_stats=False)
+
     X_train, y_train, X_test, y_test = data.get_split(split=split)
     y_train = y_train.squeeze()
     y_test = y_test.squeeze()
 
+    if dataset_name=="autos":  # remove columns that are zero
+        X_train = np.delete(X_train,[8],axis=1)
+        X_test = np.delete(X_test,[8],axis=1)
+
     X_train_max = X_train.max(0)
     X_train_min = X_train.min(0)
-    X_train = (X_train - X_train_min) / (X_train_max - X_train_min)
-    X_test = (X_test - X_train_min) / (X_train_max - X_train_min)
+    X_train = (X_train - X_train_min) / ((X_train_max - X_train_min) + 1e-6)
+    X_test = (X_test - X_train_min) / ((X_train_max - X_train_min) + 1e-6)
+
+    if normalize_y:
+        y_train_mean = np.mean(y_train)
+        y_train_std = np.std(y_train) + 1e-6
+
+        y_train  = (y_train - y_train_mean)/y_train_std
+        y_test  = (y_test - y_train_mean)/y_train_std
 
     return X_train, y_train, X_test, y_test
 
