@@ -9,9 +9,15 @@ def load_and_normalize_data(dataset_name, split=0, normalize_y = False):
     y_train = y_train.squeeze()
     y_test = y_test.squeeze()
 
-    if dataset_name=="autos":  # remove columns that are zero
+    # remove columns that are zero
+    if dataset_name=="autos":  
         X_train = np.delete(X_train,[8],axis=1)
         X_test = np.delete(X_test,[8],axis=1)
+
+    if dataset_name == "sml":
+        X_train = np.delete(X_train,[2, 20, 21, 22],axis=1)
+        X_test = np.delete(X_test,[2, 20, 21, 22],axis=1)
+   
 
     X_train_max = X_train.max(0)
     X_train_min = X_train.min(0)

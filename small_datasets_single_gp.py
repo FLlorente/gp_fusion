@@ -1,3 +1,17 @@
+'''
+This script is for comparing NLPD values (of 10 splits) for the different training configurations.
+Training configuration = {kappa, lambdaa, lr, training_iter}.
+Recall that kappa and lambda control, respectively, the initial values of 
+the noise (sign^2) and lengthscale (ell) hyperparameters.
+Specifically, noise = var(y_train)/kappa^2 and ell = std(X_train,1)/lambdaa.
+Since the initial values affect where we end up in the hyperparameter optimization,
+and since there are typically two types of local optima (short ell-low noise, and 
+long ell-high noise), we choose the kappa and lambdaa values so as to cover these two settings.
+As for the learning rate (lr) and the number of iterations of optimization (training_iter),
+we choose two settigs: small lr and large training_iter, bigger lr and less training_ter.
+The script gp_formance_variability_analysis.py runs simulations on all the "small" datasets
+in parallel.
+'''
 
 from modules.data_handling import load_and_normalize_data
 from modules.fusion_methods import compute_neg_log_like

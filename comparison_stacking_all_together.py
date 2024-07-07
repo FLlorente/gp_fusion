@@ -1,3 +1,7 @@
+# This is the original self-contained script for running comparison between the stacking and
+# product of expert algorithms. The functions in this script are outdated.
+
+
 # %%
 import numpy as np
 import scipy

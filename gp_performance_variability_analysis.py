@@ -14,11 +14,12 @@ import os
 import traceback
 
 # Parameters
-datasets = [
-    'autompg', 'concreteslump', 'energy', 'forest', 'solar', 'stock', 'yacht',
-    'airfoil', 'autos', 'breastcancer', 'concrete', 'housing', 'machine',
-    'pendulum', 'servo', 'wine'
-]
+# datasets = [
+#     'autompg', 'concreteslump', 'energy', 'forest', 'solar', 'stock', 'yacht',
+#     'airfoil', 'autos', 'breastcancer', 'concrete', 'housing', 'machine',
+#     'pendulum', 'servo', 'wine'
+# ]
+datasets = ['energy', 'solar', 'yacht']  # estos faltan....
 
 configs = [  
     # Low Noise, Short Lengthscale Regime
