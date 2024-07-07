@@ -40,13 +40,19 @@ def split_dataset(X, Y, n_splits, split_size, with_replacement=True):
     if with_replacement:
         splits = [(X[indices], Y[indices]) for indices in [np.random.choice(n_samples, split_size, replace=True) for _ in range(n_splits)]]
     else:
+        # if one of them is missing
+        if n_splits is None:
+            n_splits = np.ceil(n_samples/split_size).astype(int) 
+        if split_size is None:
+            split_size = np.ceil(n_samples/n_splits).astype(int) 
+
         indices = np.random.permutation(n_samples)
         splits = []
         for i in range(n_splits):
             start_idx = i * split_size
             end_idx = (i + 1) * split_size if (i + 1) * split_size < n_samples else n_samples
             splits.append((X[indices[start_idx:end_idx]], Y[indices[start_idx:end_idx]]))
-        # Ensure all remaining samples are included in the final split
+        # Ensure all remaining samples are included in the final split (I want to avoid this, I prefer to have all (but one) experts with more data than viceversa...)
         if n_splits * split_size < n_samples:
             splits[-1] = (np.concatenate((splits[-1][0], X[indices[n_splits * split_size:]]), axis=0),
                           np.concatenate((splits[-1][1], Y[indices[n_splits * split_size:]]), axis=0))
