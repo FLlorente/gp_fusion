@@ -11,6 +11,7 @@ from statsmodels.stats.multicomp import pairwise_tukeyhsd
 import seaborn as sns
 import multiprocessing as mp
 import os
+import traceback
 
 # Parameters
 datasets = [
@@ -61,17 +62,23 @@ def analyze_dataset(dataset_name, metric):
     
     for config in configs:
         metric_values = []
+        errors = []
         for split in range(num_seeds):
-            X_train, y_train, X_test, y_test = load_and_normalize_data(dataset_name, split, normalize_y=True)
-            
-            test_preds, _ = train_and_predict_single_gp(X_train, y_train, X_test, X_test, 
-                                                        config['kappa'], 
-                                                        config['lambdaa'],
-                                                        lr=config['lr'],
-                                                        training_iter=config['training_iter'])
-            
-            metric_value = compute_metric(test_preds, y_test, metric)
-            metric_values.append(metric_value)
+            try:    
+                X_train, y_train, X_test, y_test = load_and_normalize_data(dataset_name, split, normalize_y=True)
+                
+                test_preds, _ = train_and_predict_single_gp(X_train, y_train, X_test, X_test, 
+                                                            config['kappa'], 
+                                                            config['lambdaa'],
+                                                            lr=config['lr'],
+                                                            training_iter=config['training_iter'])
+                
+                metric_value = compute_metric(test_preds, y_test, metric)
+                metric_values.append(metric_value)
+            except Exception as e:
+                error_message = f"Error in dataset {dataset_name}, config {config}, split {split}: {str(e)}"
+                errors.append(error_message)
+                traceback.print_exc()    
             progress_bar.update(1)
 
         results.append({
