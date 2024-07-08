@@ -172,12 +172,13 @@ def train_variational_gp(X_train, y_train, inducing_points, kappa=2.0, lambdaa=1
     train_dataset = TensorDataset(to_torch(X_train), to_torch(y_train).squeeze(-1))
     train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
     
-    # Calculate the number of batches
+    '''
+    #Calculate the total number of iterations that will be run
     N = len(X_train)  # Total number of training samples
     B = batch_size    # Batch size
     num_batches = np.ceil(N / B)
-
     print("total number of iterations (gradient updates) will be ",num_batches * num_epochs)
+    '''
 
     for i in range(num_epochs):
         for X_batch, y_batch in train_loader:

@@ -6,6 +6,10 @@ from .common import train_stacking, predict_stacking
 
 
 def compute_neg_log_like(mus, stds, y_test):
+    if mus.ndim==1:  # if we are passed vectors instead of one-column matrices
+        mus = mus.reshape(-1,1)
+        stds = stds.reshape(-1,1)
+
     negloglik = np.zeros((y_test.shape[0], mus.shape[1]))
     for i in range(mus.shape[1]):
         negloglik[:, i] = -1.0 * scipy.stats.norm.logpdf(y_test, mus[:, i], stds[:, i])

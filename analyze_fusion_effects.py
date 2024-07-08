@@ -42,8 +42,8 @@ def plot_percentage_difference_per_dataset(aggregated_df):
         plt.ylabel('Percentage Difference in Mean NLPD')
         plt.legend(title='Method')
         plt.grid(True)
-        # plt.show()
-        plt.savefig(f'nlpd_vs_num_experts_{dataset}.png')
+        plt.show()
+        # plt.savefig(f'nlpd_vs_num_experts_{dataset}.png')
 
 # Function to plot aggregated percentage difference
 def plot_aggregated_percentage_difference(aggregated_df, x_var, title_suffix):
@@ -55,16 +55,24 @@ def plot_aggregated_percentage_difference(aggregated_df, x_var, title_suffix):
     plt.ylabel('Percentage Difference in Mean NLPD')
     plt.legend(title='Method')
     plt.grid(True)
-    # plt.show()
-    plt.savefig(f'agg_nlpd_vs_{x_var}.png')
+    plt.show()
+    # plt.savefig(f'agg_nlpd_vs_{x_var}.png')
 
-# Load the data
-file_path = 'experiment_results_parallel.csv'  # Update this path if necessary
+# ---- Load the data ------ #
+# this was the first results I got, using priors on the GP and "wrong" calculation
+# of the experts' prior predictive variances (I was not using the learned hyperparameters)
+# file_path = './plots/experiment_results_parallel.csv'  
+
+# this was the second set of results, where I took out the GP priors and used the learned hyperparams
+# for computing the experts' prior predictive variances
+file_path = './plots_gp_no_prior_and_alt_exp_prior_vars/experiment_results_parallel.csv'  
+
+
 df = pd.read_csv(file_path)
 
-# Exclude specific datasets
-# exclude_datasets = ['forest', 'fertility', 'pendulum']
-# df = df[~df['dataset'].isin(exclude_datasets)]
+# Exclude specific datasets (the ones where PHS diverged...)
+exclude_datasets = ['forest', 'fertility', 'pendulum']
+df = df[~df['dataset'].isin(exclude_datasets)]
 
 # Melt the dataframe to have a long-form dataset suitable for analysis
 df_melted = df.melt(id_vars=['dataset', 'split', 'num_experts', 'points_per_split'],
@@ -94,7 +102,7 @@ percentage_difference_df = calculate_percentage_difference(aggregated_data, base
 percentage_difference_df = percentage_difference_df[percentage_difference_df['method'] != 'Full GP']
 
 # Plot the percentage difference for each dataset
-plot_percentage_difference_per_dataset(percentage_difference_df)
+# plot_percentage_difference_per_dataset(percentage_difference_df)
 
 # Plot the aggregated percentage difference vs number of experts
 plot_aggregated_percentage_difference(percentage_difference_df, 'num_experts', 'vs Number of Experts')
