@@ -2,7 +2,7 @@ import numpy as np
 from sklearn.model_selection import train_test_split
 from uci_datasets import Dataset
 
-def load_and_normalize_data(dataset_name, split=0, normalize_y = False):
+def load_and_normalize_data(dataset_name, split=0, normalize_y = False, normalize_x_method="max-min"):
     data = Dataset(dataset_name,print_stats=False)
 
     X_train, y_train, X_test, y_test = data.get_split(split=split)
@@ -18,11 +18,16 @@ def load_and_normalize_data(dataset_name, split=0, normalize_y = False):
         X_train = np.delete(X_train,[2, 20, 21, 22],axis=1)
         X_test = np.delete(X_test,[2, 20, 21, 22],axis=1)
    
-
-    X_train_max = X_train.max(0)
-    X_train_min = X_train.min(0)
-    X_train = (X_train - X_train_min) / ((X_train_max - X_train_min) + 1e-6)
-    X_test = (X_test - X_train_min) / ((X_train_max - X_train_min) + 1e-6)
+    if normalize_x_method == "max-min":
+        X_train_max = X_train.max(0)
+        X_train_min = X_train.min(0)
+        X_train = (X_train - X_train_min) / ((X_train_max - X_train_min) + 1e-6)
+        X_test = (X_test - X_train_min) / ((X_train_max - X_train_min) + 1e-6)
+    if normalize_x_method == "z-score":
+        X_train_mean = X_train.mean(0)
+        X_train_std = np.std(X_train,axis=0)
+        X_train = (X_train - X_train_mean) / (X_train_std + 1e-6)
+        X_test = (X_test - X_train_mean) / (X_train_std + 1e-6)    
 
     if normalize_y:
         y_train_mean = np.mean(y_train)

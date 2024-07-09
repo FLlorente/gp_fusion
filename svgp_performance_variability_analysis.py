@@ -80,17 +80,21 @@ def analyze_dataset(dataset_name, metric):
         errors = []
         for split in range(num_seeds):
             try:    
-                X_train, y_train, X_test, y_test = load_and_normalize_data(dataset_name, split, normalize_y=True)
+                X_train, y_train, X_test, y_test = load_and_normalize_data(dataset_name, 
+                                                                           split, 
+                                                                           normalize_y=True,
+                                                                           normalize_x_method="z-score") # we have changed it, instead of using "max-min"
                 
                 np.random.seed(config["seed_inducing_points"])
                 inducing_points = X_train[np.random.choice(X_train.shape[0], 
                                                            config["num_inducing_points"], 
                                                            replace=False), :]
-
+                
                 model, likelihood = train_variational_gp(X_train, y_train, 
                                                          inducing_points,
-                                                         num_epochs=4, # FIXED
-                                                         batch_size=config["batch_size"])
+                                                         num_epochs=int(config["batch_size"]/128*4), # VARIABLE so we have the same number of training iterations than when running 4 epochs with batch_size=128
+                                                         batch_size=config["batch_size"],
+                                                         )
 
                 
                 mus,stds = predict_variational_gp(model, likelihood, X_test, batch_size=config["batch_size"])
