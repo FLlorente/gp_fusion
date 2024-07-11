@@ -38,7 +38,7 @@ def load_and_normalize_data(dataset_name, split=0, normalize_y = False, normaliz
 
     return X_train, y_train, X_test, y_test
 
-def split_dataset(X, Y, n_splits, split_size, with_replacement=True):
+def split_dataset(X, Y, n_splits=None, split_size=None, with_replacement=True):
     np.random.seed(0)
     n_samples = X.shape[0]
 
