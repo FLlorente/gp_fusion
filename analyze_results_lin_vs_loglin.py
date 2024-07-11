@@ -40,8 +40,8 @@ def analyze_results(filename, exclude_validation_proportion=None):
         g.figure.suptitle(f'Comparison of NLPD Across Methods, Number of Experts, and Validation Proportion for {dataset} Dataset')
         
         # Save the plot for each dataset
-        # plt.savefig(f'comparison_nlpd_{dataset}.png')
-        plt.show()
+        plt.savefig(f'comparison_nlpd_{dataset}.png')
+        # plt.show()
 
 if __name__ == '__main__':
     analyze_results('results_lin_vs_loglin.csv')

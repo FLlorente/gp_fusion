@@ -2,13 +2,13 @@ import pandas as pd
 import seaborn as sns
 import matplotlib.pyplot as plt
 
-# Function to aggregate data by number of experts and points per split
+# Function to aggregate data by number of experts and Validation Proportion
 def aggregate_data(df):
     results = []
     unique_datasets = df['dataset'].unique()
     for dataset in unique_datasets:
         df_subset = df[df['dataset'] == dataset]
-        aggregation = df_subset.groupby(['num_experts', 'points_per_split', 'method']).agg(
+        aggregation = df_subset.groupby(['num_experts', 'validation_proportion', 'method']).agg(
             mean_nlpd=('nlpd', 'mean')
         ).reset_index()
         aggregation['dataset'] = dataset
@@ -40,10 +40,11 @@ def plot_percentage_difference_per_dataset(aggregated_df):
         plt.title(f'Percentage Difference with Respect to Full GP for {dataset} Dataset')
         plt.xlabel('Number of Experts')
         plt.ylabel('Percentage Difference in Mean NLPD')
+        # plt.yscale('log')
         plt.legend(title='Method')
         plt.grid(True)
-        plt.show()
-        # plt.savefig(f'nlpd_vs_num_experts_{dataset}.png')
+        # plt.show()
+        plt.savefig(f'nlpd_vs_num_experts_{dataset}.png')
 
 # Function to plot aggregated percentage difference
 def plot_aggregated_percentage_difference(aggregated_df, x_var, title_suffix):
@@ -54,43 +55,37 @@ def plot_aggregated_percentage_difference(aggregated_df, x_var, title_suffix):
     plt.xlabel(x_var.replace('_', ' ').title())
     plt.ylabel('Percentage Difference in Mean NLPD')
     plt.legend(title='Method')
+    # plt.ylim((-10,300))
     plt.grid(True)
-    plt.show()
-    # plt.savefig(f'agg_nlpd_vs_{x_var}.png')
+    # plt.show()
+    plt.savefig(f'agg_nlpd_vs_{x_var}.png')
 
 # ---- Load the data ------ #
-# this was the first results I got, using priors on the GP and "wrong" calculation
-# of the experts' prior predictive variances (I was not using the learned hyperparameters)
-# file_path = './plots_experts_with_subsets/first_simu/experiment_results_parallel.csv'  
-
-# this was the second set of results, where I took out the GP priors and used the learned hyperparams
-# for computing the experts' prior predictive variances
-file_path = './plots_experts_with_subsets/second_simu/experiment_results_parallel.csv'  
+file_path = './results_lin_vs_loglin.csv'  
 
 
 df = pd.read_csv(file_path)
 
 # Exclude specific datasets (the ones where PHS diverged...)
-exclude_datasets = ['forest', 'fertility', 'pendulum']
+exclude_datasets = ['forest', 'fertility', 'autos',]
 df = df[~df['dataset'].isin(exclude_datasets)]
 
 # Melt the dataframe to have a long-form dataset suitable for analysis
-df_melted = df.melt(id_vars=['dataset', 'split', 'num_experts', 'points_per_split'],
-                    value_vars=['nlpd_single_gp', 'nlpd_experts', 'nlpd_gpoe', 'nlpd_phs', 'nlpd_bhs'],
+df_melted = df.melt(id_vars=['dataset', 'split', 'num_experts', 'validation_proportion'],
+                    value_vars=['nlpd_single_gp', 'nlpd_experts', 'nlpd_phs', 'nlpd_bhs'],
                     var_name='method', value_name='nlpd')
 
 # Mapping for method names
 method_mapping = {
     'nlpd_single_gp': 'Full GP',
     'nlpd_experts': 'Experts',
-    'nlpd_gpoe': 'gPoE',
     'nlpd_phs': 'PHS',
     'nlpd_bhs': 'BHS'
 }
 df_melted['method'] = df_melted['method'].map(method_mapping)
 
 # Filter out Full GP from the analysis by number of experts, but include it for relative calculation
-df_melted_experts_analysis = df_melted[df_melted['method'].isin(['BHS', 'PHS', 'gPoE', 'Experts', 'Full GP'])]
+df_melted_experts_analysis = df_melted[df_melted['method'].isin(['BHS', 'PHS', 'Experts', 'Full GP'])]
 
 # Aggregate the data
 aggregated_data = aggregate_data(df_melted_experts_analysis)
@@ -107,5 +102,5 @@ percentage_difference_df = percentage_difference_df[percentage_difference_df['me
 # Plot the aggregated percentage difference vs number of experts
 plot_aggregated_percentage_difference(percentage_difference_df, 'num_experts', 'vs Number of Experts')
 
-# Plot the aggregated percentage difference vs points per split
-plot_aggregated_percentage_difference(percentage_difference_df, 'points_per_split', 'vs Points per Split')
+# Plot the aggregated percentage difference vs validation proportion
+plot_aggregated_percentage_difference(percentage_difference_df, 'validation_proportion', 'vs Validation Proportion')
