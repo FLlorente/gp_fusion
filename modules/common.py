@@ -3,7 +3,7 @@ import jax.numpy as jnp
 import jax.random as random
 import numpyro
 from numpyro.infer import NUTS, MCMC, Predictive
-from pyro.infer import SVI, Trace_ELBO
+from numpyro.infer import SVI, Trace_ELBO
 from numpyro.infer.autoguide import AutoDelta, AutoNormal
 from optax import adam, chain, clip
 
@@ -142,7 +142,7 @@ def predict_stacking(model, samples, X_val, X_test, mu_preds_test, std_preds_tes
 
 
 def train_stacking_with_svi(model, X_val, mu_preds_val, std_preds_val, y_val,
-                           guide_svi="map", progress_bar=True):
+                           guide_svi="map", progress_bar=False):
     
 
     if guide_svi == "map":
@@ -151,7 +151,6 @@ def train_stacking_with_svi(model, X_val, mu_preds_val, std_preds_val, y_val,
                     init_loc_fn = numpyro.infer.initialization.init_to_median,
                     ),
             optim=chain(clip(10.0), adam(0.005)),
-            # optim=numpyro.optim.Adam(0.005),
             loss=Trace_ELBO(),
         )
     elif guide_svi=="normal":
@@ -160,7 +159,6 @@ def train_stacking_with_svi(model, X_val, mu_preds_val, std_preds_val, y_val,
                     init_loc_fn = numpyro.infer.initialization.init_to_median,
                     ),
             optim=chain(clip(10.0), adam(0.005)),
-            # optim=numpyro.optim.Adam(0.005),
             loss=Trace_ELBO(),
         )
 

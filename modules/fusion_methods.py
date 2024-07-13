@@ -88,6 +88,7 @@ def train_and_predict_fusion_method(model,
                                     std_preds_test, 
                                     y_test,
                                     method = "mcmc",
+                                    parallel_mcmc = False,
                                     guide_svi = None,
                                     show_progress = False,
                                     ):
@@ -101,6 +102,7 @@ def train_and_predict_fusion_method(model,
             std_preds_val=std_preds_val,
             y_val=y_val,
             show_progress=show_progress,
+            parallel=parallel_mcmc,
         )
     elif method == "svi":
         samples = train_stacking_with_svi(

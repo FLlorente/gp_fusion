@@ -40,11 +40,11 @@ def initialize_hyperparameters(model, likelihood, X_train, y_train, kappa, lambd
     }
     model.initialize(**hypers)
 
-def train_model(model, likelihood, X_train, y_train, training_iter=100, lr=0.1):
+def train_model(model, likelihood, X_train, y_train, training_iter, lr, seed):
+    torch.manual_seed(seed) # no parece afectar a los resultados...
     model.train()
     likelihood.train()
-    import numpyro
-    # optimizer = numpyro.optim.Minimize(model.parameters())
+  
     optimizer = torch.optim.Adam(model.parameters(), lr=lr)
     mll = gpytorch.mlls.ExactMarginalLogLikelihood(likelihood, model)
 
@@ -74,15 +74,14 @@ def store_predictions_for_experts(experts, X):
         std_preds_prior.append(std_prior)
     return np.stack(mu_preds, axis=-1), np.stack(std_preds, axis=-1), np.stack(std_preds_prior, axis=-1)
 
-def train_and_predict_single_gp(X_train, y_train, X_test, X_val, kappa=2.0, lambdaa=1.0, kernel=None, mean=None, training_iter=100, lr=0.1):
-    torch.manual_seed(0)
+def train_and_predict_single_gp(X_train, y_train, X_test, X_val, kappa=2.0, lambdaa=1.0, kernel=None, mean=None, training_iter=100, lr=0.1, seed = 0):
     likelihood = gpytorch.likelihoods.GaussianLikelihood(
         noise_constraint=gpytorch.constraints.GreaterThan(1e-4)
         )
 
     model_gpy = GPModel(to_torch(X_train), to_torch(y_train).squeeze(-1), likelihood, kernel, mean)
     initialize_hyperparameters(model_gpy, likelihood, X_train, y_train, kappa, lambdaa)
-    train_model(model_gpy, likelihood, to_torch(X_train), to_torch(y_train).squeeze(-1), training_iter, lr)
+    train_model(model_gpy, likelihood, to_torch(X_train), to_torch(y_train).squeeze(-1), training_iter, lr, seed)
 
     with torch.no_grad(), gpytorch.settings.fast_pred_var():
         test_preds = likelihood(model_gpy(to_torch(X_test)))
@@ -91,17 +90,16 @@ def train_and_predict_single_gp(X_train, y_train, X_test, X_val, kappa=2.0, lamb
     return test_preds, val_preds
 
 def train_expert(X_train, y_train, kappa=2.0, lambdaa=1.0, kernel=None, mean=None, training_iter=100, lr=0.1):
-    torch.manual_seed(0)
     likelihood = gpytorch.likelihoods.GaussianLikelihood()
 
     model_gpy = GPModel(to_torch(X_train), to_torch(y_train).squeeze(-1), likelihood, kernel, mean)
     initialize_hyperparameters(model_gpy, likelihood, X_train, y_train, kappa, lambdaa)
-    train_model(model_gpy, likelihood, to_torch(X_train), to_torch(y_train).squeeze(-1), training_iter, lr)
+    train_model(model_gpy, likelihood, to_torch(X_train), to_torch(y_train).squeeze(-1), training_iter, lr, seed)
 
     return model_gpy, likelihood
 
-def train_joint_experts_shared_kernel(expert_datasets, kappa=2.0, lambdaa=1.0, kernel=None, mean=None, training_iter=100, lr=0.1):
-    torch.manual_seed(0)
+def train_joint_experts_shared_kernel(expert_datasets, kappa=2.0, lambdaa=1.0, kernel=None, mean=None, training_iter=100, lr=0.1, seed=0):
+    torch.manual_seed(seed)
     kernel = kernel or gpytorch.kernels.ScaleKernel(gpytorch.kernels.RBFKernel(ard_num_dims=expert_datasets[0][0].shape[1]))
     likelihood = gpytorch.likelihoods.GaussianLikelihood()
 
@@ -122,7 +120,7 @@ def train_joint_experts_shared_kernel(expert_datasets, kappa=2.0, lambdaa=1.0, k
     for _ in range(training_iter):
         optimizer.zero_grad()
         total_loss = 0
-        for model in models:
+        for model in models:  # in principle, this loop could be distributed and/or parallelized
             train_x = model.train_inputs[0]
             train_y = model.train_targets
             mll = gpytorch.mlls.ExactMarginalLogLikelihood(likelihood, model)
@@ -131,7 +129,7 @@ def train_joint_experts_shared_kernel(expert_datasets, kappa=2.0, lambdaa=1.0, k
             total_loss += loss
         total_loss.backward()
         optimizer.step()
-        optimizer.zero_grad()
+        # optimizer.zero_grad()
 
     for model in models:
         model.eval()
@@ -155,8 +153,8 @@ class VariationalGPModel(ApproximateGP):
         return gpytorch.distributions.MultivariateNormal(mean_x, covar_x)
     
 
-def train_variational_gp(X_train, y_train, inducing_points, kappa=2.0, lambdaa=1.0, learning_rate=0.01, num_epochs=10, batch_size=128):
-    torch.manual_seed(0)
+def train_variational_gp(X_train, y_train, inducing_points, kappa=2.0, lambdaa=1.0, learning_rate=0.01, num_epochs=10, batch_size=128,seed=0):
+    torch.manual_seed(seed)
     likelihood = GaussianLikelihood()
     model = VariationalGPModel(to_torch(X_train), to_torch(inducing_points), likelihood)
 

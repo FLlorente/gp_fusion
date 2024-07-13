@@ -13,13 +13,48 @@ import multiprocessing as mp
 import os
 import traceback
 
+
+
+'''
+autompg (392, 7)
+concreteslump (103, 7)
+energy (768, 8)
+forest (517, 12)
+solar (1066, 10)
+stock (536, 11)
+yacht (308, 6)
+airfoil (1503, 5)
+autos (159, 25)
+breastcancer (194, 33)
+concrete (1030, 8)
+housing (506, 13)
+machine (209, 7)
+pendulum (630, 9)
+servo (167, 4)
+wine (1599, 11)
+'''
+
+
 # Parameters
-# datasets = [
-#     'autompg', 'concreteslump', 'energy', 'forest', 'solar', 'stock', 'yacht',
-#     'airfoil', 'autos', 'breastcancer', 'concrete', 'housing', 'machine',
-#     'pendulum', 'servo', 'wine'
-# ]
-datasets = ['energy', 'solar', 'yacht']  # estos faltan....
+datasets = [
+    'autompg', 
+    'concreteslump', 
+    'energy', 
+    # 'forest', 
+    'solar', 
+    'stock', 
+    'yacht',
+    'airfoil', 
+    # 'autos', 
+    'breastcancer', 
+    'concrete', 
+    'housing', 
+    'machine',
+    'pendulum', 
+    'servo', 
+    'wine',
+    'concrete',
+]
 
 configs = [  
     # Low Noise, Short Lengthscale Regime
@@ -40,6 +75,10 @@ configs = [
     {"kappa": 20, "lambdaa": 5, "lr": 0.1, "training_iter": 100},
     {"kappa": 20, "lambdaa": 5, "lr": 0.01, "training_iter": 500},
 ]
+
+
+
+
 
 num_seeds = 10
 metric = "nlpd"  # Change to "mse" for MSE comparison
