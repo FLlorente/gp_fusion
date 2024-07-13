@@ -3,6 +3,7 @@ import scipy
 from .phs import phs
 from .bhs import bhs
 from .common import train_stacking, predict_stacking
+from .common import train_stacking_with_svi
 
 
 def compute_neg_log_like(mus, stds, y_test):
@@ -77,15 +78,40 @@ def product_fusion(mus, stds, stds_prior=None,
 
     return mean_fused, 1 / np.sqrt(prec_fused), weights
 
-def train_and_predict_fusion_method(model, X_val, mu_preds_val, std_preds_val, y_val, X_test, mu_preds_test, std_preds_test, y_test):
-    # Train the fusion model
-    samples = train_stacking(
-        model=model,
-        X_val=X_val,
-        mu_preds_val=mu_preds_val,
-        std_preds_val=std_preds_val,
-        y_val=y_val,
-    )
+def train_and_predict_fusion_method(model, 
+                                    X_val, 
+                                    mu_preds_val, 
+                                    std_preds_val, 
+                                    y_val, 
+                                    X_test, 
+                                    mu_preds_test, 
+                                    std_preds_test, 
+                                    y_test,
+                                    method = "mcmc",
+                                    guide_svi = None,
+                                    show_progress = False,
+                                    ):
+    
+    if method == "mcmc":
+        # Train the fusion model
+        samples = train_stacking(
+            model=model,
+            X_val=X_val,
+            mu_preds_val=mu_preds_val,
+            std_preds_val=std_preds_val,
+            y_val=y_val,
+            show_progress=show_progress,
+        )
+    elif method == "svi":
+        samples = train_stacking_with_svi(
+            model=model,
+            X_val=X_val,
+            mu_preds_val=mu_preds_val,
+            std_preds_val=std_preds_val,
+            y_val=y_val,
+            guide_svi=guide_svi,
+            progress_bar=show_progress,
+        )
 
     # Predict using the trained fusion model
     preds, lpd_test = predict_stacking(

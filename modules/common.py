@@ -3,8 +3,15 @@ import jax.numpy as jnp
 import jax.random as random
 import numpyro
 from numpyro.infer import NUTS, MCMC, Predictive
+from pyro.infer import SVI, Trace_ELBO
+from numpyro.infer.autoguide import AutoDelta, AutoNormal
+from optax import adam, chain, clip
 
+# Vectorized matrix multiplication
+matmul_vmapped = jax.vmap(lambda A,B: (A @ B).squeeze(), in_axes=(0, 0))
 
+# Vectorized division
+vdivide = jax.vmap(lambda x, y: jnp.divide(x, y), (None, 0))
 
 # squared euclidean distance
 def sqeuclidean_distance(x, y):
@@ -131,3 +138,51 @@ def predict_stacking(model, samples, X_val, X_test, mu_preds_test, std_preds_tes
     lpd_test = jax.nn.logsumexp(pred_samples["lpd_point"], axis=0) - jnp.log(pred_samples["lpd_point"].shape[0])
 
     return pred_samples, lpd_test
+
+
+
+def train_stacking_with_svi(model, X_val, mu_preds_val, std_preds_val, y_val,
+                           guide_svi="map", progress_bar=True):
+    
+
+    if guide_svi == "map":
+        svi= SVI(model,
+            AutoDelta(model, 
+                    init_loc_fn = numpyro.infer.initialization.init_to_median,
+                    ),
+            optim=chain(clip(10.0), adam(0.005)),
+            # optim=numpyro.optim.Adam(0.005),
+            loss=Trace_ELBO(),
+        )
+    elif guide_svi=="normal":
+        svi= SVI(model,
+            AutoNormal(model, 
+                    init_loc_fn = numpyro.infer.initialization.init_to_median,
+                    ),
+            optim=chain(clip(10.0), adam(0.005)),
+            # optim=numpyro.optim.Adam(0.005),
+            loss=Trace_ELBO(),
+        )
+
+    results = svi.run(
+        random.PRNGKey(0),
+        3000,  # for adam
+        X_val,   
+        mu_preds_val, 
+        std_preds_val, 
+        y_val=y_val,
+        progress_bar=progress_bar,
+    )
+
+    params = results.params
+
+    if guide_svi == "map":
+        guide = AutoDelta(model)
+        predictive = Predictive(guide, params=params, num_samples=1)  # more than 1 is pointless
+    elif guide_svi == "normal":
+        guide = AutoNormal(model)
+        predictive = Predictive(guide, params=params, num_samples=400)
+
+    samples = predictive(random.PRNGKey(0),X_val,mu_preds_val,std_preds_val,y_val)
+
+    return samples
