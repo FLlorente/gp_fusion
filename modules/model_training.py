@@ -33,11 +33,20 @@ def initialize_hyperparameters(model, likelihood, X_train, y_train, kappa, lambd
     likelihood.noise_covar.initialize(noise=torch.tensor(1.0 * y_train.var() / kappa**2))
     
     # Initialize model kernel and mean parameters
-    hypers = {
-        'covar_module.base_kernel.lengthscale': torch.from_numpy(np.std(X_train, axis=0) / lambdaa),
-        'covar_module.outputscale': torch.tensor(1.0 * y_train.var()),
-        'mean_module.constant': torch.tensor(y_train.mean(), requires_grad=False)
-    }
+    if isinstance(model.mean_module,gpytorch.means.ConstantMean):
+        hypers = {
+            'covar_module.base_kernel.lengthscale': torch.from_numpy(np.std(X_train, axis=0) / lambdaa),
+            'covar_module.outputscale': torch.tensor(1.0 * y_train.var()),
+            'mean_module.constant': torch.tensor(y_train.mean(), requires_grad=False)
+        }
+    elif isinstance(model.mean_module,gpytorch.means.ZeroMean):
+        hypers = {
+            'covar_module.base_kernel.lengthscale': torch.from_numpy(np.std(X_train, axis=0) / lambdaa),
+            'covar_module.outputscale': torch.tensor(1.0 * y_train.var()),
+        }
+    else:
+        raise ValueError("Mean functions is not of type ConstantMean or ZeroMean.")
+    
     model.initialize(**hypers)
 
 def train_model(model, likelihood, X_train, y_train, training_iter, lr, seed):
