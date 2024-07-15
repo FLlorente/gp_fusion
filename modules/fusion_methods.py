@@ -4,6 +4,7 @@ from .phs import phs
 from .bhs import bhs
 from .common import train_stacking, predict_stacking
 from .common import train_stacking_with_svi, predict_stacking_with_rff
+from .common import predict_stacking_without_noise
 
 
 def compute_neg_log_like(mus, stds, y_test):
@@ -120,16 +121,29 @@ def train_and_predict_fusion_method(model,
 
     # Predict using the trained fusion model
     if gp_method == "vanilla":
-        preds, lpd_test = predict_stacking(
-            model=model,
-            samples=samples,
-            X_val=X_val,
-            X_test=X_test,
-            mu_preds_test=mu_preds_test,
-            std_preds_test=std_preds_test,
-            y_test=y_test,
-            prior_mean=lambda x: -np.log(mu_preds_test.shape[1]) * np.ones(x.shape[0]),
-        )
+        if "kernel_noise" in samples.keys():
+            preds, lpd_test = predict_stacking(
+                model=model,
+                samples=samples,
+                X_val=X_val,
+                X_test=X_test,
+                mu_preds_test=mu_preds_test,
+                std_preds_test=std_preds_test,
+                y_test=y_test,
+                prior_mean=lambda x: -np.log(mu_preds_test.shape[1]) * np.ones(x.shape[0]),
+            )
+        else:
+            preds, lpd_test = predict_stacking_without_noise(
+                model=model,
+                samples=samples,
+                X_val=X_val,
+                X_test=X_test,
+                mu_preds_test=mu_preds_test,
+                std_preds_test=std_preds_test,
+                y_test=y_test,
+                prior_mean=lambda x: -np.log(mu_preds_test.shape[1]) * np.ones(x.shape[0]),
+            )
+
     elif gp_method == "rff":
         preds, lpd_test = predict_stacking_with_rff(
                                                     model, 
@@ -139,5 +153,7 @@ def train_and_predict_fusion_method(model,
                                                     std_preds_test, 
                                                     y_test
                                                     )
+    else:
+        raise ValueError("GP model not valid.")
 
     return preds, lpd_test

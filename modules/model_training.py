@@ -162,10 +162,10 @@ class VariationalGPModel(ApproximateGP):
         return gpytorch.distributions.MultivariateNormal(mean_x, covar_x)
     
 
-def train_variational_gp(X_train, y_train, inducing_points, kappa=2.0, lambdaa=1.0, learning_rate=0.01, num_epochs=10, batch_size=128,seed=0):
+def train_variational_gp(X_train, y_train, inducing_points, kappa=2.0, lambdaa=1.0, learning_rate=0.01, num_epochs=10, batch_size=128,seed=0,kernel=None, mean=None):
     torch.manual_seed(seed)
     likelihood = GaussianLikelihood()
-    model = VariationalGPModel(to_torch(X_train), to_torch(inducing_points), likelihood)
+    model = VariationalGPModel(to_torch(X_train), to_torch(inducing_points), likelihood,kernel=kernel,mean=mean)
 
     initialize_hyperparameters(model, likelihood, X_train, y_train, kappa, lambdaa)
     

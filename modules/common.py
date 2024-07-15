@@ -74,6 +74,7 @@ vmapped_pred_with_mean = jax.vmap(
     in_axes=(None, None, 1, None, 1, 1, 1, None, None),
 )
 
+
 def train_stacking(model, X_val, mu_preds_val, std_preds_val, y_val, 
                    parallel=False, show_progress=False,show_summary=False):
 
@@ -201,3 +202,47 @@ def predict_stacking_with_rff(model, samples, X_test, mu_preds_test, std_preds_t
     return preds, lpd
 
 
+
+vmap_SE_kernel_fer = jax.vmap(SE_kernel, in_axes=(None, None, 0, 0, None)) # without noise
+
+vmapped_pred_with_mean_fer = jax.vmap(
+    predict_with_mean, in_axes=(None, None, 0, None, 0, 0, None, None, None) # without noise
+)
+
+vmapped_pred_with_mean_fer = jax.vmap(
+    vmapped_pred_with_mean_fer,
+    in_axes=(None, None, 1, None, 1, 1, None, None, None),  # without noise
+)
+
+def predict_stacking_without_noise(model, samples, X_val, X_test, mu_preds_test, std_preds_test, y_test, prior_mean = lambda x: jnp.zeros(x.shape[0])):
+    
+    if "kernel_noise" in samples.keys():
+        raise ValueError("Use this function with phs_without_noise/bhs_without_noise only.")
+    
+    res = vmapped_pred_with_mean_fer(
+        random.PRNGKey(0),
+        X_val,
+        samples["w_un"],
+        X_test, # TEST DATA
+        samples["kernel_var"],
+        samples["kernel_length"],
+        0,  # without noise
+        SE_kernel,
+        prior_mean,
+    )
+
+    w_un_samples = jnp.asarray(res[0])
+    pred_samples = {"w_un": jnp.transpose(w_un_samples, (1, 0, 2))}
+
+    predictive = Predictive(model, pred_samples)
+    pred_samples = predictive(
+        random.PRNGKey(0),
+        X=X_test, # TEST DATA
+        mu_preds=mu_preds_test,  # TEST DATA
+        std_preds=std_preds_test, # TEST DATA
+        y_val = y_test, # TEST DATA
+    )
+
+    lpd_test = jax.nn.logsumexp(pred_samples["lpd_point"], axis=0) - jnp.log(pred_samples["lpd_point"].shape[0])
+
+    return pred_samples, lpd_test

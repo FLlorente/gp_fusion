@@ -3,6 +3,7 @@ import jax.numpy as jnp
 import numpyro
 from numpyro import distributions as dist
 from .common import vmap_SE_kernel, matmul_vmapped, vdivide
+from .common import vmap_SE_kernel_fer
 
 def phs(X, mu_preds, std_preds, y_val=None):
     N, M = mu_preds.shape
@@ -214,3 +215,66 @@ def phs_with_rff(X, mu_preds, std_preds, y_val=None, S = 50):
             scale=jnp.squeeze(std_fused),
         ),
     )
+
+
+
+
+    '''
+    phs without noise in the GPs
+    '''
+def phs_without_noise(X, mu_preds, std_preds, y_val=None):
+    N, M = mu_preds.shape
+
+    assert mu_preds.shape == std_preds.shape
+
+    tau_preds = 1 / std_preds**2
+
+    ######################
+    # GP for log weights #
+    ######################
+    with numpyro.plate("M", M):
+        kernel_var = numpyro.sample("kernel_var", dist.HalfNormal(1.0))
+        kernel_length = numpyro.sample("kernel_length", 
+                                    #    dist.InverseGamma(5.0, 5.0),
+                                    dist.HalfNormal(1.0),
+                                    )
+        # kernel_noise = numpyro.sample("kernel_noise", dist.HalfNormal(1.0))
+
+    k = numpyro.deterministic(
+        "k", vmap_SE_kernel_fer(X, X, kernel_var, kernel_length, 0)  # without noise
+    )
+
+    with numpyro.plate("logw_plate", M, dim=-1):
+        log_w = numpyro.sample(
+            "w_un", dist.MultivariateNormal(loc=-jnp.log(M), covariance_matrix=k)
+        )
+
+    ################################################
+    # Fuse with generalized multiplicative pooling #
+    ################################################
+    w = numpyro.deterministic("w", jnp.exp(log_w))
+
+    tau_fused = numpyro.deterministic(
+        "tau_fused", jnp.einsum("nm,mn->n", tau_preds, w)
+    )  # N,
+
+    assert tau_fused.shape == (N,)
+    mu_fused = numpyro.deterministic(
+        "mean_fused", jnp.einsum("nm,nm,mn->n", tau_preds, mu_preds, w) / tau_fused
+    )  # N,
+    assert mu_fused.shape == (N,)
+    std_fused = numpyro.deterministic("std_fused", 1 / jnp.sqrt(tau_fused))
+
+    numpyro.sample(
+        "y_val",
+        dist.Normal(loc=jnp.squeeze(mu_fused), scale=jnp.squeeze(std_fused)),
+        obs=y_val,
+    )
+
+    numpyro.deterministic(
+        "lpd_point",
+        jax.scipy.stats.norm.logpdf(
+        jnp.squeeze(y_val), loc=jnp.squeeze(mu_fused), scale=jnp.squeeze(std_fused))    
+    )
+
+
