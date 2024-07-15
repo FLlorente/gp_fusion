@@ -38,6 +38,38 @@ def load_and_normalize_data(dataset_name, split=0, normalize_y = False, normaliz
 
     return X_train, y_train, X_test, y_test
 
+'''
+This is the new function for loading the data. The dataset is already formatted such that all 
+columns of X and Y have zero mean. This can be seen in the benchmark_GPs_in_uci_datasets.jpynb.
+To normalize, we only have to divide the whole dataset by the std (of the cols of X and Y, separately).
+We also return the y_std for computing error measures on the original test data (that has zero mean, but
+was not scaled by the std). 
+'''
+def load_data(dataset_name, split=0):  
+    data = Dataset(dataset_name,print_stats=False)
+
+    X_train, y_train, X_test, y_test = data.get_split(split=split)
+    
+    # remove columns that are zero
+    if dataset_name=="autos":  
+        X_train = np.delete(X_train,[8],axis=1)
+        X_test = np.delete(X_test,[8],axis=1)
+
+    if dataset_name == "sml":
+        X_train = np.delete(X_train,[2, 20, 21, 22],axis=1)
+        X_test = np.delete(X_test,[2, 20, 21, 22],axis=1)
+
+
+    X_std = np.vstack([X_train,X_test]).std(0)
+    X_train = X_train / X_std
+    X_test = X_test / X_std 
+
+    y_std = np.vstack([y_train,y_test]).std(0) 
+    y_train = y_train / y_std
+    y_test = y_test / y_std
+  
+    return X_train, y_train, X_test, y_test, y_std
+
 def split_dataset(X, Y, n_splits=None, split_size=None, with_replacement=True):
     np.random.seed(0)
     n_samples = X.shape[0]
