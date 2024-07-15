@@ -143,8 +143,6 @@ def predict_stacking(model, samples, X_val, X_test, mu_preds_test, std_preds_tes
 
 def train_stacking_with_svi(model, X_val, mu_preds_val, std_preds_val, y_val,
                            guide_svi="map", progress_bar=False):
-    
-
     if guide_svi == "map":
         svi= SVI(model,
             AutoDelta(model, 
@@ -184,3 +182,22 @@ def train_stacking_with_svi(model, X_val, mu_preds_val, std_preds_val, y_val,
     samples = predictive(random.PRNGKey(0),X_val,mu_preds_val,std_preds_val,y_val)
 
     return samples
+
+
+def predict_stacking_with_rff(model, samples, X_test, mu_preds_test, std_preds_test, y_test):
+    predictive = Predictive(model, samples)
+    preds = predictive(
+        jax.random.PRNGKey(0),
+        X=X_test,
+        mu_preds=mu_preds_test,
+        std_preds=std_preds_test,
+        y_val=y_test,
+    )
+
+    lpd = jnp.mean(
+        jax.nn.logsumexp(preds["lpd_point"], axis=0) - jnp.log(preds["lpd_point"].shape[0])
+    )
+
+    return preds, lpd
+
+

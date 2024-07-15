@@ -89,7 +89,7 @@ def train_and_predict_single_gp(X_train, y_train, X_test, X_val, kappa=2.0, lamb
 
     return test_preds, val_preds
 
-def train_expert(X_train, y_train, kappa=2.0, lambdaa=1.0, kernel=None, mean=None, training_iter=100, lr=0.1):
+def train_expert(X_train, y_train, kappa=2.0, lambdaa=1.0, kernel=None, mean=None, training_iter=100, lr=0.1, seed=0):
     likelihood = gpytorch.likelihoods.GaussianLikelihood()
 
     model_gpy = GPModel(to_torch(X_train), to_torch(y_train).squeeze(-1), likelihood, kernel, mean)
@@ -98,7 +98,7 @@ def train_expert(X_train, y_train, kappa=2.0, lambdaa=1.0, kernel=None, mean=Non
 
     return model_gpy, likelihood
 
-def train_joint_experts_shared_kernel(expert_datasets, kappa=2.0, lambdaa=1.0, kernel=None, mean=None, training_iter=100, lr=0.1, seed=0):
+def train_joint_experts_shared_kernel(expert_datasets, kappa=2.0, lambdaa=1.0, kernel=None, mean=None, training_iter=100, lr=0.1,seed=0):
     torch.manual_seed(seed)
     kernel = kernel or gpytorch.kernels.ScaleKernel(gpytorch.kernels.RBFKernel(ard_num_dims=expert_datasets[0][0].shape[1]))
     likelihood = gpytorch.likelihoods.GaussianLikelihood()

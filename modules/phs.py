@@ -161,7 +161,7 @@ def phs_with_rff(X, mu_preds, std_preds, y_val=None, S = 50):
 
     assert lengthscale_logw.shape == (M, DIM)
 
-    theta_logw = jnp.tile(jnp.sqrt(var_logw), 2 * S) * theta_logw
+    theta_logw = jnp.tile(jnp.sqrt(var_logw), 2 * S) * theta_logw   # signal power is here!
 
     Omega_logw = vdivide(Omega, lengthscale_logw)  # shape = (M,S,DIM)
     ola = X @ jnp.transpose(
@@ -176,14 +176,14 @@ def phs_with_rff(X, mu_preds, std_preds, y_val=None, S = 50):
     )  # se me habia olvidado dividir entre jnp.sqrt(S)
 
     logw = numpyro.deterministic(
-        "w_un", matmul_vmapped(Phi_logw, theta_logw) - jnp.log(M)
+        "w_un", matmul_vmapped(Phi_logw, theta_logw) - jnp.log(M)  # Prior mean is here!
     )
     assert logw.shape == (M, N)
 
     ################################################
     # Fuse with generalized multiplicative pooling #
     ################################################
-    w = numpyro.deterministic("w", jnp.exp(logw))
+    w = numpyro.deterministic("w", jnp.exp(logw))  # shape == (M, N)
     # w  = w.T
 
     # print(w.shape, tau_preds.shape)

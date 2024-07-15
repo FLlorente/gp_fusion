@@ -3,7 +3,7 @@ import scipy
 from .phs import phs
 from .bhs import bhs
 from .common import train_stacking, predict_stacking
-from .common import train_stacking_with_svi
+from .common import train_stacking_with_svi, predict_stacking_with_rff
 
 
 def compute_neg_log_like(mus, stds, y_test):
@@ -87,13 +87,15 @@ def train_and_predict_fusion_method(model,
                                     mu_preds_test, 
                                     std_preds_test, 
                                     y_test,
-                                    method = "mcmc",
+                                    inference_method = "mcmc",
+                                    gp_method = "vanilla",
                                     parallel_mcmc = False,
                                     guide_svi = None,
                                     show_progress = False,
+                                    show_summary = False,
                                     ):
     
-    if method == "mcmc":
+    if inference_method == "mcmc":
         # Train the fusion model
         samples = train_stacking(
             model=model,
@@ -103,8 +105,9 @@ def train_and_predict_fusion_method(model,
             y_val=y_val,
             show_progress=show_progress,
             parallel=parallel_mcmc,
+            show_summary=show_summary,
         )
-    elif method == "svi":
+    elif inference_method == "svi":
         samples = train_stacking_with_svi(
             model=model,
             X_val=X_val,
@@ -116,15 +119,25 @@ def train_and_predict_fusion_method(model,
         )
 
     # Predict using the trained fusion model
-    preds, lpd_test = predict_stacking(
-        model=model,
-        samples=samples,
-        X_val=X_val,
-        X_test=X_test,
-        mu_preds_test=mu_preds_test,
-        std_preds_test=std_preds_test,
-        y_test=y_test,
-        prior_mean=lambda x: -np.log(mu_preds_test.shape[1]) * np.ones(x.shape[0]),
-    )
+    if gp_method == "vanilla":
+        preds, lpd_test = predict_stacking(
+            model=model,
+            samples=samples,
+            X_val=X_val,
+            X_test=X_test,
+            mu_preds_test=mu_preds_test,
+            std_preds_test=std_preds_test,
+            y_test=y_test,
+            prior_mean=lambda x: -np.log(mu_preds_test.shape[1]) * np.ones(x.shape[0]),
+        )
+    elif gp_method == "rff":
+        preds, lpd_test = predict_stacking_with_rff(
+                                                    model, 
+                                                    samples, 
+                                                    X_test, 
+                                                    mu_preds_test, 
+                                                    std_preds_test, 
+                                                    y_test
+                                                    )
 
     return preds, lpd_test
