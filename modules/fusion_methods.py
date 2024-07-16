@@ -157,3 +157,97 @@ def train_and_predict_fusion_method(model,
         raise ValueError("GP model not valid.")
 
     return preds, lpd_test
+
+
+
+
+
+class TrainingConfig:
+    def __init__(self, inference_method="mcmc", gp_method="vanilla", 
+                 parallel_mcmc=False, guide_svi=None, 
+                 show_progress=False, show_summary=False,
+                 num_warmup=100, num_samples=100,num_chains=4,  # for NUTS
+                 lr_svi=0.005, training_iter_svi=3000,          # for SVI
+                 ): 
+        
+        self.inference_method = inference_method
+        self.gp_method = gp_method
+        self.parallel_mcmc = parallel_mcmc
+        self.guide_svi = guide_svi
+        self.show_progress = show_progress
+        self.show_summary = show_summary
+        self.num_warmup = num_warmup
+        self.num_samples = num_samples
+        self.num_chains = num_chains
+        self.lr_svi = lr_svi
+        self.training_iter_svi = training_iter_svi
+
+
+
+def train_and_predict_fusion_method_new(model,data,config):
+    
+    if config.inference_method == "mcmc":
+        samples = train_stacking(
+            model=model,
+            X_val=data["X_val"],
+            mu_preds_val=data["mu_preds_val"],
+            std_preds_val=data["std_preds_val"],
+            y_val=data["y_val"],
+            show_progress=config.show_progress,
+            parallel=config.parallel_mcmc,
+            show_summary=config.show_summary,
+            num_warmup=config.num_warmup,
+            num_samples=config.num_samples,
+            num_chains=config.num_chains,
+        )
+    elif config.inference_method == "svi":
+        samples = train_stacking_with_svi(
+            model=model,
+            X_val=data["X_val"],
+            mu_preds_val=data["mu_preds_val"],
+            std_preds_val=data["std_preds_val"],
+            y_val=data["y_val"],
+            guide_svi=config.guide_svi,
+            progress_bar=config.show_progress,
+            learning_rate=config.lr_svi,
+            training_iter=config.training_iter_svi,
+        )
+
+    # Predict using the trained fusion model
+    if config.gp_method == "vanilla":
+        if "kernel_noise" in samples.keys():
+            preds, lpd_test = predict_stacking(
+                model=model,
+                samples=samples,
+                X_val=data["X_val"],
+                X_test=data["X_test"],
+                mu_preds_test=data["mu_preds_test"],
+                std_preds_test=data["std_preds_test"],
+                y_test=data["y_test"],
+                prior_mean=lambda x: -np.log(data["mu_preds_test"].shape[1]) * np.ones(x.shape[0]),
+            )
+        else:
+            preds, lpd_test = predict_stacking_without_noise(
+                model=model,
+                samples=samples,
+                X_val=data["X_val"],
+                X_test=data["X_test"],
+                mu_preds_test=data["mu_preds_test"],
+                std_preds_test=data["std_preds_test"],
+                y_test=data["y_test"],
+                prior_mean=lambda x: -np.log(data["mu_preds_test"].shape[1]) * np.ones(x.shape[0]),
+            )
+    elif config.gp_method == "rff":
+        preds, lpd_test = predict_stacking_with_rff(
+            model=model, 
+            samples=samples, 
+            X_test=data["X_test"], 
+            mu_preds_test=data["mu_preds_test"], 
+            std_preds_test=data["std_preds_test"], 
+            y_test=data["y_test"]
+        )
+    else:
+        raise ValueError("GP model not valid.")
+
+    return preds, lpd_test
+

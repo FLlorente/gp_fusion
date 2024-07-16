@@ -76,7 +76,8 @@ vmapped_pred_with_mean = jax.vmap(
 
 
 def train_stacking(model, X_val, mu_preds_val, std_preds_val, y_val, 
-                   parallel=False, show_progress=False,show_summary=False):
+                   parallel=False, show_progress=False,show_summary=False,
+                   num_warmup=100, num_samples=100, num_chains=4):
 
     if parallel:
         numpyro.set_host_device_count(4)
@@ -91,9 +92,9 @@ def train_stacking(model, X_val, mu_preds_val, std_preds_val, y_val,
         NUTS(model, 
             init_strategy=numpyro.infer.initialization.init_to_median,
         ),
-        num_warmup=100,
-        num_samples=100,
-        num_chains=4,
+        num_warmup=num_warmup,
+        num_samples=num_samples,
+        num_chains=num_chains,
         progress_bar=show_progress,
         chain_method=chain_method,
     )
@@ -113,7 +114,7 @@ def train_stacking(model, X_val, mu_preds_val, std_preds_val, y_val,
 
 def predict_stacking(model, samples, X_val, X_test, mu_preds_test, std_preds_test, y_test, prior_mean = lambda x: jnp.zeros(x.shape[0])):
     res = vmapped_pred_with_mean(
-        random.PRNGKey(0),
+        random.PRNGKey(0),  # this one is not being use since we only extract the posterior mean
         X_val,
         samples["w_un"],
         X_test, # TEST DATA
@@ -124,12 +125,12 @@ def predict_stacking(model, samples, X_val, X_test, mu_preds_test, std_preds_tes
         prior_mean,
     )
 
-    w_un_samples = jnp.asarray(res[0])
+    w_un_samples = jnp.asarray(res[0])  # we could have used a random sample instead of the posterior mean
     pred_samples = {"w_un": jnp.transpose(w_un_samples, (1, 0, 2))}
 
     predictive = Predictive(model, pred_samples)
     pred_samples = predictive(
-        random.PRNGKey(0),
+        random.PRNGKey(0),   # this one doesn't matter since we only want to extract the lpd values
         X=X_test, # TEST DATA
         mu_preds=mu_preds_test,  # TEST DATA
         std_preds=std_preds_test, # TEST DATA
@@ -143,13 +144,14 @@ def predict_stacking(model, samples, X_val, X_test, mu_preds_test, std_preds_tes
 
 
 def train_stacking_with_svi(model, X_val, mu_preds_val, std_preds_val, y_val,
-                           guide_svi="map", progress_bar=False):
+                           guide_svi="map", progress_bar=False,
+                           learning_rate=0.005, training_iter = 3000):
     if guide_svi == "map":
         svi= SVI(model,
             AutoDelta(model, 
                     init_loc_fn = numpyro.infer.initialization.init_to_median,
                     ),
-            optim=chain(clip(10.0), adam(0.005)),
+            optim=chain(clip(10.0), adam(learning_rate)),
             loss=Trace_ELBO(),
         )
     elif guide_svi=="normal":
@@ -157,13 +159,13 @@ def train_stacking_with_svi(model, X_val, mu_preds_val, std_preds_val, y_val,
             AutoNormal(model, 
                     init_loc_fn = numpyro.infer.initialization.init_to_median,
                     ),
-            optim=chain(clip(10.0), adam(0.005)),
+            optim=chain(clip(10.0), adam(learning_rate)),
             loss=Trace_ELBO(),
         )
 
     results = svi.run(
         random.PRNGKey(0),
-        3000,  # for adam
+        training_iter,  # for adam
         X_val,   
         mu_preds_val, 
         std_preds_val, 
