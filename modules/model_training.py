@@ -83,13 +83,16 @@ def store_predictions_for_experts(experts, X):
         std_preds_prior.append(std_prior)
     return np.stack(mu_preds, axis=-1), np.stack(std_preds, axis=-1), np.stack(std_preds_prior, axis=-1)
 
-def train_and_predict_single_gp(X_train, y_train, X_test, X_val, kappa=2.0, lambdaa=1.0, kernel=None, mean=None, training_iter=100, lr=0.1, seed = 0):
+def train_and_predict_single_gp(X_train, y_train, X_test, X_val, kappa=2.0, lambdaa=1.0, kernel=None, mean=None, training_iter=100, lr=0.1, seed = 0, initialiaze_hyper = True):
     likelihood = gpytorch.likelihoods.GaussianLikelihood(
         noise_constraint=gpytorch.constraints.GreaterThan(1e-4)
         )
 
     model_gpy = GPModel(to_torch(X_train), to_torch(y_train).squeeze(-1), likelihood, kernel, mean)
-    initialize_hyperparameters(model_gpy, likelihood, X_train, y_train, kappa, lambdaa)
+    
+    if initialiaze_hyper:
+        initialize_hyperparameters(model_gpy, likelihood, X_train, y_train, kappa, lambdaa)
+    
     train_model(model_gpy, likelihood, to_torch(X_train), to_torch(y_train).squeeze(-1), training_iter, lr, seed)
 
     with torch.no_grad(), gpytorch.settings.fast_pred_var():
@@ -98,11 +101,15 @@ def train_and_predict_single_gp(X_train, y_train, X_test, X_val, kappa=2.0, lamb
 
     return test_preds, val_preds
 
-def train_expert(X_train, y_train, kappa=2.0, lambdaa=1.0, kernel=None, mean=None, training_iter=100, lr=0.1, seed=0):
+def train_expert(X_train, y_train, kappa=2.0, lambdaa=1.0, kernel=None, mean=None, training_iter=100, lr=0.1, seed=0,initialize_hyper=True):
     likelihood = gpytorch.likelihoods.GaussianLikelihood()
 
     model_gpy = GPModel(to_torch(X_train), to_torch(y_train).squeeze(-1), likelihood, kernel, mean)
-    initialize_hyperparameters(model_gpy, likelihood, X_train, y_train, kappa, lambdaa)
+    
+    if initialize_hyper:
+        initialize_hyperparameters(model_gpy, likelihood, X_train, y_train, kappa, lambdaa)
+    
+    
     train_model(model_gpy, likelihood, to_torch(X_train), to_torch(y_train).squeeze(-1), training_iter, lr, seed)
 
     return model_gpy, likelihood

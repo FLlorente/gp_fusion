@@ -65,8 +65,8 @@ def load_data(dataset_name, split=0):
     X_test = X_test / X_std 
 
     y_std = np.vstack([y_train,y_test]).std(0) 
-    y_train = y_train / y_std
-    y_test = y_test / y_std
+    y_train = (y_train / y_std).squeeze()
+    y_test = (y_test / y_std).squeeze()
   
     return X_train, y_train, X_test, y_test, y_std
 

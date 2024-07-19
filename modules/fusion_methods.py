@@ -28,6 +28,9 @@ def product_fusion(mus, stds, stds_prior=None,
     # stds       is num_test x num_experts
     # stds_prior is num_test x num_experts
 
+    assert mus.ndim == 2
+    assert stds.ndim == 2
+
     # Number of experts
     M = mus.shape[1]
 
@@ -185,6 +188,21 @@ class TrainingConfig:
 
 
 def train_and_predict_fusion_method_new(model,data,config):
+
+    ''' data is a dictionary:
+    data = {
+        "X_val": X_val,
+        "mu_preds_val": mu_preds_val,
+        "std_preds_val": std_preds_val,
+        "y_val": y_val,
+        "X_test": X_test,
+        "mu_preds_test": mu_preds_test,
+        "std_preds_test": std_preds_test,
+        "y_test": y_test
+        }
+
+        config is a TrainingConfig object
+    '''
     
     if config.inference_method == "mcmc":
         samples = train_stacking(
