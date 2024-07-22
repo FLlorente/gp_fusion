@@ -182,14 +182,14 @@ def train_stacking_with_svi(model, X_val, mu_preds_val, std_preds_val, y_val,
         guide = AutoNormal(model)
         predictive = Predictive(guide, params=params, num_samples=400)
 
-    samples = predictive(random.PRNGKey(0),X_val,mu_preds_val,std_preds_val,y_val)
+    samples = predictive(random.PRNGKey(0),X_val,mu_preds_val,std_preds_val,y_val)  # these are samples from the guide! See https://github.com/pyro-ppl/numpyro/issues/1309
 
     return samples
 
 
 def predict_stacking_with_rff(model, samples, X_test, mu_preds_test, std_preds_test, y_test):
     predictive = Predictive(model, samples)
-    preds = predictive(
+    preds = predictive(             # these are the samples from the posterior predictive!
         jax.random.PRNGKey(0),
         X=X_test,
         mu_preds=mu_preds_test,
