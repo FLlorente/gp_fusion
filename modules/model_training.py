@@ -294,9 +294,9 @@ def train_and_predict_batched_gp(X_train, y_train, X_test,training_iter=100, lr=
 
 
 class BatchVariationalGPModel(ApproximateGP):
-    def __init__(self, train_x, likelihood, kernel=None, mean=None):
-        inducing_points = train_x[0,:100,:]
-        variational_distribution = CholeskyVariationalDistribution(inducing_points.shape[0],
+    def __init__(self, train_x,num_inducing_points, kernel=None, mean=None):
+        inducing_points = train_x[:,:num_inducing_points,:]
+        variational_distribution = CholeskyVariationalDistribution(num_inducing_points,
                                                                    batch_shape=torch.Size([train_x.shape[0]]))
         variational_strategy = VariationalStrategy(self, inducing_points, variational_distribution, learn_inducing_locations=True)
         super(BatchVariationalGPModel, self).__init__(variational_strategy)
@@ -311,7 +311,7 @@ class BatchVariationalGPModel(ApproximateGP):
         return gpytorch.distributions.MultivariateNormal(mean_x, covar_x)
     
 
-def train_and_predict_batched_svgp(X_train, y_train, X_test,training_iter=100, lr=0.1, batch_size = 128, num_epochs = 5):
+def train_and_predict_batched_svgp(X_train, y_train, X_test,num_epochs=5, lr=0.1, batch_size = 128, num_inducing_points = 100):
     likelihood = gpytorch.likelihoods.GaussianLikelihood(
         noise_constraint=gpytorch.constraints.GreaterThan(1e-4),
         batch_shape=torch.Size([X_train.shape[0]]),
@@ -321,17 +321,15 @@ def train_and_predict_batched_svgp(X_train, y_train, X_test,training_iter=100, l
     y_train = to_torch(y_train)
     X_test = to_torch(X_test)
 
-
     assert X_train.ndim == 3
     assert y_train.ndim == 2
     assert X_test.ndim == 3
 
-    model = BatchVariationalGPModel(X_train, y_train, likelihood)
+    model = BatchVariationalGPModel(X_train,num_inducing_points=num_inducing_points)
 
     model.train()
     likelihood.train()
 
-    
     optimizer = torch.optim.Adam(list(model.parameters()) + list(likelihood.parameters()), lr=lr)
     mll = VariationalELBO(likelihood, model, num_data=X_train.shape[1])
     
@@ -352,7 +350,8 @@ def train_and_predict_batched_svgp(X_train, y_train, X_test,training_iter=100, l
             X_batch = X_batch.transpose(0, 1)
             y_batch = y_batch.transpose(0, 1)
 
-            print(X_batch.shape)
+            # print(X_batch.shape)
+            # print(y_batch.shape)
 
             optimizer.zero_grad()
             output = model(X_batch)
@@ -372,8 +371,9 @@ def train_and_predict_batched_svgp(X_train, y_train, X_test,training_iter=100, l
     
     with torch.no_grad(), gpytorch.settings.fast_pred_var():
         for X_batch in test_loader:
-            X_batch = X_batch.transpose(0, 1)
             X_batch = X_batch[0]  # Unpack the tuple
+            X_batch = X_batch.transpose(0, 1)
+            
             preds = likelihood(model(X_batch))
             means.append(preds.mean.cpu().numpy())
             variances.append(preds.variance.cpu().numpy())
