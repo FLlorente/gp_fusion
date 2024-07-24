@@ -6,7 +6,7 @@ from gpytorch.models import ApproximateGP
 from gpytorch.variational import VariationalStrategy, CholeskyVariationalDistribution
 from gpytorch.likelihoods import GaussianLikelihood
 from gpytorch.mlls import VariationalELBO
-from gpytorch.means import ConstantMean
+from gpytorch.means import ConstantMean, ZeroMean
 from gpytorch.kernels import ScaleKernel, RBFKernel
 import numpy as np
 
@@ -226,3 +226,162 @@ def predict_variational_gp(model, likelihood, X_test, batch_size=128):
     var = np.concatenate(variances, axis=0)
     
     return mean, np.sqrt(var)
+
+
+
+class BatchGPModel(gpytorch.models.ExactGP):
+    def __init__(self, train_x, train_y, likelihood, kernel):
+        super(BatchGPModel, self).__init__(train_x, train_y, likelihood)
+        self.mean_module = gpytorch.means.ZeroMean(batch_shape=torch.Size([train_x.shape[0]]))
+        self.covar_module = kernel or gpytorch.kernels.ScaleKernel(
+            gpytorch.kernels.RBFKernel(batch_shape=torch.Size([train_x.shape[0]]),
+                                       ard_num_dims=train_x.shape[2]),
+            batch_shape=torch.Size([train_x.shape[0]])
+        )
+    
+    def forward(self, x):
+        mean_x = self.mean_module(x)
+        covar_x = self.covar_module(x)
+        return gpytorch.distributions.MultivariateNormal(mean_x, covar_x)
+    
+
+
+def train_and_predict_batched_gp(X_train, y_train, X_test,training_iter=100, lr=0.1, kernel = None):
+    likelihood = gpytorch.likelihoods.GaussianLikelihood(
+        noise_constraint=gpytorch.constraints.GreaterThan(1e-4)
+        )
+    
+    X_train = to_torch(X_train)
+    y_train = to_torch(y_train)
+    X_test = to_torch(X_test)
+
+
+    assert X_train.ndim == 3
+    assert y_train.ndim == 2
+    assert X_test.ndim == 3
+
+    model = BatchGPModel(X_train, y_train, likelihood, kernel)
+
+    model.train()
+    likelihood.train()
+
+    # Use the adam optimizer
+    optimizer = torch.optim.Adam(model.parameters(), lr)  # Includes GaussianLikelihood parameters
+
+    # "Loss" for GPs - the marginal log likelihood
+    mll = gpytorch.mlls.ExactMarginalLogLikelihood(likelihood, model)
+
+    for i in range(training_iter):
+        # Zero gradients from previous iteration
+        optimizer.zero_grad()
+        # Output from model
+        output = model(X_train)
+        # Calc loss and backprop gradients
+        loss = -mll(output,y_train).sum()
+        loss.backward()
+        optimizer.step()
+
+
+    model.eval()
+    likelihood.eval()
+    with torch.no_grad(), gpytorch.settings.fast_pred_var():
+        preds = likelihood(model(X_test))
+        preds_prior = likelihood(model.forward(X_test))
+
+    return preds, preds_prior
+
+
+
+
+class BatchVariationalGPModel(ApproximateGP):
+    def __init__(self, train_x, likelihood, kernel=None, mean=None):
+        inducing_points = train_x[0,:100,:]
+        variational_distribution = CholeskyVariationalDistribution(inducing_points.shape[0],
+                                                                   batch_shape=torch.Size([train_x.shape[0]]))
+        variational_strategy = VariationalStrategy(self, inducing_points, variational_distribution, learn_inducing_locations=True)
+        super(BatchVariationalGPModel, self).__init__(variational_strategy)
+        self.mean_module = mean or ZeroMean(batch_shape=torch.Size([train_x.shape[0]]))
+        self.covar_module = kernel or ScaleKernel(RBFKernel(ard_num_dims=train_x.shape[2],
+                                                            batch_shape=torch.Size([train_x.shape[0]])),
+                                                  batch_shape=torch.Size([train_x.shape[0]]))
+
+    def forward(self, x):
+        mean_x = self.mean_module(x)
+        covar_x = self.covar_module(x)
+        return gpytorch.distributions.MultivariateNormal(mean_x, covar_x)
+    
+
+def train_and_predict_batched_svgp(X_train, y_train, X_test,training_iter=100, lr=0.1, batch_size = 128, num_epochs = 5):
+    likelihood = gpytorch.likelihoods.GaussianLikelihood(
+        noise_constraint=gpytorch.constraints.GreaterThan(1e-4),
+        batch_shape=torch.Size([X_train.shape[0]]),
+        )
+    
+    X_train = to_torch(X_train)
+    y_train = to_torch(y_train)
+    X_test = to_torch(X_test)
+
+
+    assert X_train.ndim == 3
+    assert y_train.ndim == 2
+    assert X_test.ndim == 3
+
+    model = BatchVariationalGPModel(X_train, y_train, likelihood)
+
+    model.train()
+    likelihood.train()
+
+    
+    optimizer = torch.optim.Adam(list(model.parameters()) + list(likelihood.parameters()), lr=lr)
+    mll = VariationalELBO(likelihood, model, num_data=X_train.shape[1])
+    
+    # Create DataLoader for mini-batch training
+    train_dataset = TensorDataset(X_train.transpose(0, 1), y_train.transpose(0, 1))
+    train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
+    
+    '''
+    #Calculate the total number of iterations that will be run
+    N = len(X_train)  # Total number of training samples
+    B = batch_size    # Batch size
+    num_batches = np.ceil(N / B)
+    print("total number of iterations (gradient updates) will be ",num_batches * num_epochs)
+    '''
+
+    for i in range(num_epochs):
+        for X_batch, y_batch in train_loader:
+            X_batch = X_batch.transpose(0, 1)
+            y_batch = y_batch.transpose(0, 1)
+
+            print(X_batch.shape)
+
+            optimizer.zero_grad()
+            output = model(X_batch)
+            loss = -mll(output, y_batch).sum()
+            loss.backward()
+            optimizer.step()
+
+
+    model.eval()
+    likelihood.eval()
+
+    test_dataset = TensorDataset(X_test.transpose(0, 1))
+    test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False)
+    
+    means = []
+    variances = []
+    
+    with torch.no_grad(), gpytorch.settings.fast_pred_var():
+        for X_batch in test_loader:
+            X_batch = X_batch.transpose(0, 1)
+            X_batch = X_batch[0]  # Unpack the tuple
+            preds = likelihood(model(X_batch))
+            means.append(preds.mean.cpu().numpy())
+            variances.append(preds.variance.cpu().numpy())
+    
+    mean = np.concatenate(means, axis=1)
+    var = np.concatenate(variances, axis=1)
+    
+    return mean, np.sqrt(var)
+
+
+    

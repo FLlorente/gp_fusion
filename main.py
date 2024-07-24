@@ -117,8 +117,8 @@ samples_phs = train_stacking(
     mu_preds_val=mu_preds_val,
     std_preds_val=std_preds_val,
     y_val=y_val,
-    # parallel = True,
-    # show_progress=True,
+    parallel = True,
+    show_progress=True,
 )
 
 preds_phs, lpd_phs_test = predict_stacking(
@@ -131,8 +131,8 @@ preds_phs, lpd_phs_test = predict_stacking(
     y_test=y_test,
     prior_mean=lambda x: -np.log(mu_preds_test.shape[1]) * np.ones(x.shape[0]),
 )
-
-
+import jax
+print(jax.local_device_count())
 
 print("NLPD PHS: ", -lpd_phs_test.mean())
 # print("NLPD PHS: ", -lpd_phs_test_otro.mean())

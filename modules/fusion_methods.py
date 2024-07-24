@@ -30,6 +30,8 @@ def product_fusion(mus, stds, stds_prior=None,
 
     assert mus.ndim == 2
     assert stds.ndim == 2
+    if stds_prior is not None:
+        assert stds_prior.ndim == 2
 
     # Number of experts
     M = mus.shape[1]
@@ -50,6 +52,8 @@ def product_fusion(mus, stds, stds_prior=None,
     # Normalize the weights if required
     if normalize:
         weights = normalize_weights(weights)
+
+    assert weights.shape == mus.shape    
 
     # Compute precisions
     precs = 1 / stds**2
