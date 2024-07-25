@@ -15,6 +15,10 @@ import numpy as np
 def to_torch(x, dtype=torch.float32):
     return torch.from_numpy(x).type(dtype)
 
+
+'''
+Exact GP
+'''
 class GPModel(gpytorch.models.ExactGP):
     def __init__(self, train_x, train_y, likelihood, kernel=None, mean=None):
         super(GPModel, self).__init__(train_x, train_y, likelihood)
@@ -49,6 +53,22 @@ def initialize_hyperparameters(model, likelihood, X_train, y_train, kappa, lambd
     
     model.initialize(**hypers)
 
+'''
+This is an utility for computing and storing predictions with trained experts
+'''
+def store_predictions_for_experts(experts, X):
+    mu_preds, std_preds, std_preds_prior = [], [], []
+    for model, likelihood in experts:
+        mu, std, std_prior = predict_with_expert(model, likelihood, X)
+        mu_preds.append(mu)
+        std_preds.append(std)
+        std_preds_prior.append(std_prior)
+    return np.stack(mu_preds, axis=-1), np.stack(std_preds, axis=-1), np.stack(std_preds_prior, axis=-1)
+
+
+'''
+Training loop for an exact GP; used by train_expert and train_and_predict_single_gp
+'''
 def train_model(model, likelihood, X_train, y_train, training_iter, lr, seed):
     torch.manual_seed(seed) # no parece afectar a los resultados...
     model.train()
@@ -67,6 +87,26 @@ def train_model(model, likelihood, X_train, y_train, training_iter, lr, seed):
     model.eval()
     likelihood.eval()
 
+
+'''
+Main function for training an exact GP
+'''
+def train_expert(X_train, y_train, kappa=2.0, lambdaa=1.0, kernel=None, mean=None, training_iter=100, lr=0.1, seed=0,initialize_hyper=True):
+    likelihood = gpytorch.likelihoods.GaussianLikelihood()
+
+    model_gpy = GPModel(to_torch(X_train), to_torch(y_train).squeeze(-1), likelihood, kernel, mean)
+    
+    if initialize_hyper:
+        initialize_hyperparameters(model_gpy, likelihood, X_train, y_train, kappa, lambdaa)
+    
+    
+    train_model(model_gpy, likelihood, to_torch(X_train), to_torch(y_train).squeeze(-1), training_iter, lr, seed)
+
+    return model_gpy, likelihood
+
+'''
+Main function for predicting with an exact GP
+'''
 def predict_with_expert(model, likelihood, X):
     X_torch = to_torch(X)
     with torch.no_grad(), gpytorch.settings.fast_pred_var():
@@ -74,15 +114,11 @@ def predict_with_expert(model, likelihood, X):
         preds_prior = likelihood(model.forward(X_torch))
     return preds.mean.numpy(), np.sqrt(preds.variance.numpy()), np.sqrt(preds_prior.variance.numpy())
 
-def store_predictions_for_experts(experts, X):
-    mu_preds, std_preds, std_preds_prior = [], [], []
-    for model, likelihood in experts:
-        mu, std, std_prior = predict_with_expert(model, likelihood, X)
-        mu_preds.append(mu)
-        std_preds.append(std)
-        std_preds_prior.append(std_prior)
-    return np.stack(mu_preds, axis=-1), np.stack(std_preds, axis=-1), np.stack(std_preds_prior, axis=-1)
 
+
+'''
+Main function for training and predicting with an exact GP
+'''
 def train_and_predict_single_gp(X_train, y_train, X_test, X_val, kappa=2.0, lambdaa=1.0, kernel=None, mean=None, training_iter=100, lr=0.1, seed = 0, initialiaze_hyper = True):
     likelihood = gpytorch.likelihoods.GaussianLikelihood(
         noise_constraint=gpytorch.constraints.GreaterThan(1e-4)
@@ -101,19 +137,12 @@ def train_and_predict_single_gp(X_train, y_train, X_test, X_val, kappa=2.0, lamb
 
     return test_preds, val_preds
 
-def train_expert(X_train, y_train, kappa=2.0, lambdaa=1.0, kernel=None, mean=None, training_iter=100, lr=0.1, seed=0,initialize_hyper=True):
-    likelihood = gpytorch.likelihoods.GaussianLikelihood()
 
-    model_gpy = GPModel(to_torch(X_train), to_torch(y_train).squeeze(-1), likelihood, kernel, mean)
-    
-    if initialize_hyper:
-        initialize_hyperparameters(model_gpy, likelihood, X_train, y_train, kappa, lambdaa)
-    
-    
-    train_model(model_gpy, likelihood, to_torch(X_train), to_torch(y_train).squeeze(-1), training_iter, lr, seed)
 
-    return model_gpy, likelihood
 
+'''
+Joint training of exact GPs (they share the same kernel), not in parallel (batch mode)
+'''
 def train_joint_experts_shared_kernel(expert_datasets, kappa=2.0, lambdaa=1.0, kernel=None, mean=None, training_iter=100, lr=0.1,seed=0):
     torch.manual_seed(seed)
     kernel = kernel or gpytorch.kernels.ScaleKernel(gpytorch.kernels.RBFKernel(ard_num_dims=expert_datasets[0][0].shape[1]))
@@ -155,8 +184,13 @@ def train_joint_experts_shared_kernel(expert_datasets, kappa=2.0, lambdaa=1.0, k
 
 
 
+
+
+'''
+======== Stochastic variational GP ========
+'''
 class VariationalGPModel(ApproximateGP):
-    def __init__(self, train_x, inducing_points, likelihood, kernel=None, mean=None):
+    def __init__(self, train_x, inducing_points, kernel, mean):
         variational_distribution = CholeskyVariationalDistribution(inducing_points.size(0))
         variational_strategy = VariationalStrategy(self, inducing_points, variational_distribution, learn_inducing_locations=True)
         super(VariationalGPModel, self).__init__(variational_strategy)
@@ -169,17 +203,21 @@ class VariationalGPModel(ApproximateGP):
         return gpytorch.distributions.MultivariateNormal(mean_x, covar_x)
     
 
+'''
+Main function for training a SVGP with minibatching
+'''
 def train_variational_gp(X_train, y_train, inducing_points, kappa=2.0, lambdaa=1.0, learning_rate=0.01, num_epochs=10, batch_size=128,seed=0,kernel=None, mean=None):
     torch.manual_seed(seed)
     likelihood = GaussianLikelihood()
-    model = VariationalGPModel(to_torch(X_train), to_torch(inducing_points), likelihood,kernel=kernel,mean=mean)
+    model = VariationalGPModel(to_torch(X_train), to_torch(inducing_points), kernel=kernel,mean=mean)
 
     initialize_hyperparameters(model, likelihood, X_train, y_train, kappa, lambdaa)
     
     model.train()
     likelihood.train()
     
-    optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
+    # since the likelihood is not included in the model, we need to pass the likelihood parameters to the optimizer
+    optimizer = torch.optim.Adam(list(model.parameters()) + list(likelihood.parameters()), lr=learning_rate)
     mll = VariationalELBO(likelihood, model, num_data=X_train.shape[0])
     
     # Create DataLoader for mini-batch training
@@ -204,7 +242,9 @@ def train_variational_gp(X_train, y_train, inducing_points, kappa=2.0, lambdaa=1
     
     return model, likelihood  
 
-
+'''
+Main for predicting using a SVGP model (note we also use minibatching to predict)
+'''
 def predict_variational_gp(model, likelihood, X_test, batch_size=128):
     model.eval()
     likelihood.eval()
@@ -219,7 +259,7 @@ def predict_variational_gp(model, likelihood, X_test, batch_size=128):
         for X_batch in test_loader:
             X_batch = X_batch[0]  # Unpack the tuple
             preds = likelihood(model(X_batch))
-            means.append(preds.mean.cpu().numpy())
+            means.append(preds.mean.cpu().numpy())   # shape = (batch_size,)
             variances.append(preds.variance.cpu().numpy())
     
     mean = np.concatenate(means, axis=0)
@@ -229,6 +269,13 @@ def predict_variational_gp(model, likelihood, X_test, batch_size=128):
 
 
 
+
+
+
+
+'''
+====== Training and prediction with batch of independent GPs (i.e. parallel training and prediction) =====
+'''
 class BatchGPModel(gpytorch.models.ExactGP):
     def __init__(self, train_x, train_y, likelihood, kernel):
         super(BatchGPModel, self).__init__(train_x, train_y, likelihood)
@@ -293,6 +340,10 @@ def train_and_predict_batched_gp(X_train, y_train, X_test,training_iter=100, lr=
 
 
 
+
+'''
+======= Training and prediction with batch of independent SVGPs =======
+'''
 class BatchVariationalGPModel(ApproximateGP):
     def __init__(self, train_x,num_inducing_points, kernel=None, mean=None):
         inducing_points = train_x[:,:num_inducing_points,:]
@@ -338,11 +389,7 @@ def train_and_predict_batched_svgp(X_train, y_train, X_test,num_epochs=5, lr=0.1
     train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
     
     '''
-    #Calculate the total number of iterations that will be run
-    N = len(X_train)  # Total number of training samples
-    B = batch_size    # Batch size
-    num_batches = np.ceil(N / B)
-    print("total number of iterations (gradient updates) will be ",num_batches * num_epochs)
+    total number of iterations (gradient updates) will be num_batches * num_epochs
     '''
 
     for i in range(num_epochs):
@@ -350,7 +397,7 @@ def train_and_predict_batched_svgp(X_train, y_train, X_test,num_epochs=5, lr=0.1
             X_batch = X_batch.transpose(0, 1)
             y_batch = y_batch.transpose(0, 1)
 
-            # print(X_batch.shape)
+            # print(X_batch.shape)  # this will be (batch_shape, batch_size, DIM); do not confuse batch_shape (independent SVGPs) with batch_size (minibatching)
             # print(y_batch.shape)
 
             optimizer.zero_grad()
@@ -375,10 +422,10 @@ def train_and_predict_batched_svgp(X_train, y_train, X_test,num_epochs=5, lr=0.1
             X_batch = X_batch.transpose(0, 1)
             
             preds = likelihood(model(X_batch))
-            means.append(preds.mean.cpu().numpy())
+            means.append(preds.mean.cpu().numpy())   # shape = (batch_shape, batch_size)
             variances.append(preds.variance.cpu().numpy())
     
-    mean = np.concatenate(means, axis=1)
+    mean = np.concatenate(means, axis=1)   # shape = (batch_shape, Ntest)
     var = np.concatenate(variances, axis=1)
     
     return mean, np.sqrt(var)
