@@ -43,7 +43,7 @@ from uci_datasets import Dataset
 
 
 
-def run_single_gp(dataset_name, lr = 0.1, training_iter=100):
+def run_single_gp(dataset_name, kernel = None, lr = 0.1, training_iter=100):
     nlpd = []
     rmse = []
     for i in tqdm(range(10)):
@@ -57,6 +57,7 @@ def run_single_gp(dataset_name, lr = 0.1, training_iter=100):
 
             test_preds, _ = train_and_predict_single_gp(X_train,y_train,X_test,X_test,
                                     mean=ZeroMean(),  # we don't want to use the mean of y_train as prior mean
+                                    kernel = kernel,
                                     lr=lr,
                                     training_iter=training_iter,
                                     initialiaze_hyper=False, # if false, kappa and lambdaa don't matter!
@@ -96,8 +97,8 @@ def run_gam_gp(dataset_name, lr = 0.1, training_iter = 100):
                                     kappa=2,lambdaa=2,
                                     mean=ZeroMean(),  # we don't want to use the mean of y_train as prior mean
                                     kernel=kernel,
-                                    lr=0.1,
-                                    training_iter=200,
+                                    lr=lr,
+                                    training_iter=training_iter,
                                     initialiaze_hyper=False, # if False, kappa and lambdaa are not used for initializing the hyperparameters; we just use the default values.
                                     )
             nlpd_now = compute_neg_log_like(test_preds.mean,np.sqrt(test_preds.variance),y_test)

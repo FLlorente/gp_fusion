@@ -14,7 +14,7 @@ def compute_neg_log_like(mus, stds, y_test):
 
     negloglik = np.zeros((y_test.shape[0], mus.shape[1]))
     for i in range(mus.shape[1]):
-        negloglik[:, i] = -1.0 * scipy.stats.norm.logpdf(y_test, mus[:, i], stds[:, i])
+        negloglik[:, i] = -1.0 * scipy.stats.norm.logpdf(y_test.squeeze(), mus[:, i].squeeze(), stds[:, i].squeeze())
     return negloglik.mean(0)
 
 
