@@ -1,3 +1,6 @@
+import warnings
+warnings.filterwarnings("ignore", message=".*omp.h header is not in the path, disabling OpenMP.*")
+
 import os
 import pickle
 import numpy as np
@@ -37,6 +40,8 @@ def run_single_gp(dataset_name, gam=False, lr=0.1, training_iter=100):
                 kernel = None
 
             test_preds, _ = train_and_predict_single_gp(X_train, y_train, X_test, X_test,
+                                                        # kappa=2,
+                                                        # lambdaa=2,
                                                         mean=ZeroMean(),
                                                         kernel=kernel,
                                                         lr=lr,
@@ -128,43 +133,47 @@ def run_stacked_proj_gp_batched(dataset_name, num_projections, project_dim,
 def run_experiment_for_dataset(dataset_name, num_proj_dim_vals, num_projections_vals, save_path):
     dataset_path = os.path.join(save_path, f"{dataset_name}_results.pkl")
 
-    print(f"Running experiments for {dataset_name}...")
+    if not os.path.exists(dataset_path):
 
-    data = Dataset(dataset_name)
-    X_train = data.x
-    proj_dim_vals = np.linspace(1, X_train.shape[1], num_proj_dim_vals).astype(int)
+        print(f"Running experiments for {dataset_name}...")
 
-    results = {
-        "single_gp": run_single_gp(dataset_name),
-        "gam_gp": run_single_gp(dataset_name, gam=True),
-        "stacked_proj_gp_batched": []
-    }
+        data = Dataset(dataset_name)
+        X_train = data.x
+        proj_dim_vals = np.linspace(1, X_train.shape[1], num_proj_dim_vals).astype(int)
 
-    for num_projections in num_projections_vals:
-        nlpd = []
-        rmse = []
-        std_err_nlpd = []
-        std_err_rmse = []
-        for project_dim in proj_dim_vals:
-            result = run_stacked_proj_gp_batched(dataset_name, num_projections, project_dim=project_dim)
-            # substitute with the results of other weighting strategies, e.g., 
-            # result["gPoE_entropy_normalize_True"][
-            nlpd.append(result["gPoE_uniform_normalize_True"]["mean_nlpd"])
-            rmse.append(result["gPoE_uniform_normalize_True"]["mean_rmse"])
-            std_err_nlpd.append(result["gPoE_uniform_normalize_True"]["std_err_nlpd"])
-            std_err_rmse.append(result["gPoE_uniform_normalize_True"]["std_err_rmse"])
+        results = {
+            "single_gp": run_single_gp(dataset_name),
+            "gam_gp": run_single_gp(dataset_name, gam=True),
+            "stacked_proj_gp_batched": []
+        }
 
-        results["stacked_proj_gp_batched"].append({
-            "num_projections": num_projections,
-            "proj_dim_vals": proj_dim_vals,
-            "nlpd": np.array(nlpd),
-            "rmse": np.array(rmse),
-            "std_err_nlpd": np.array(std_err_nlpd),
-            "std_err_rmse": np.array(std_err_rmse)
-        })
+        for num_projections in num_projections_vals:
+            nlpd = []
+            rmse = []
+            std_err_nlpd = []
+            std_err_rmse = []
+            for project_dim in proj_dim_vals:
+                result = run_stacked_proj_gp_batched(dataset_name, num_projections, project_dim=project_dim)
+                # substitute with the results of other weighting strategies, e.g., 
+                # result["gPoE_entropy_normalize_True"][
+                nlpd.append(result["gPoE_uniform_normalize_True"]["mean_nlpd"])
+                rmse.append(result["gPoE_uniform_normalize_True"]["mean_rmse"])
+                std_err_nlpd.append(result["gPoE_uniform_normalize_True"]["std_err_nlpd"])
+                std_err_rmse.append(result["gPoE_uniform_normalize_True"]["std_err_rmse"])
 
-    save_results(results, dataset_path)
-    print(f"Results for {dataset_name} saved.")
+            results["stacked_proj_gp_batched"].append({
+                "num_projections": num_projections,
+                "proj_dim_vals": proj_dim_vals,
+                "nlpd": np.array(nlpd),
+                "rmse": np.array(rmse),
+                "std_err_nlpd": np.array(std_err_nlpd),
+                "std_err_rmse": np.array(std_err_rmse)
+            })
+
+        save_results(results, dataset_path)
+        print(f"Results for {dataset_name} saved.")
+    else:
+        print(f"Results for {dataset_name} already exist.")
 
 
 def run_and_store_all_datasets(dataset_names, num_proj_dim_vals, num_projections_vals, save_path):
@@ -277,13 +286,12 @@ if __name__ == '__main__':
     num_projections_vals = [2,5,10,20]  # Example values, you can modify
 
     # Run and store results
-    # run_and_store_all_datasets(dataset_names, num_proj_dim_vals, num_projections_vals)
+    # run_and_store_all_datasets(dataset_names, num_proj_dim_vals, num_projections_vals,save_path)
 
     # Plot results
-    plot_results(dataset_names, num_proj_dim_vals,save_path=save_path)
+    # plot_results(dataset_names, num_proj_dim_vals,save_path=save_path)
 
     # View results
-    # dataset_name = "autompg"
-    # filename = os.path.join(save_path, f"{dataset_name}_results.pkl")  # Example filename
-    
-    # view_results(filename)
+    dataset_name = dataset_names[1]
+    filename = os.path.join(save_path, f"{dataset_name}_results.pkl")  # Example filename
+    view_results(filename)
