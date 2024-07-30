@@ -207,8 +207,8 @@ def plot_results(dataset_names, num_proj_dim_vals, save_path):
 
         plt.figure(figsize=(12, 5))
 
-        data = Dataset(dataset_name)
-        proj_dim_vals = np.linspace(1, data.x.shape[1], num_proj_dim_vals).astype(int)
+        # data = Dataset(dataset_name)
+        # proj_dim_vals = np.linspace(1, data.x.shape[1], num_proj_dim_vals).astype(int)
 
         # Plot RMSE
         plt.subplot(1, 2, 1)
