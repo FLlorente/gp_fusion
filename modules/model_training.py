@@ -15,7 +15,7 @@ import numpy as np
 def to_torch(x, dtype=torch.float32):
     return torch.from_numpy(x).type(dtype)
 
-
+#%%
 '''
 Exact GP
 '''
@@ -185,7 +185,7 @@ def train_joint_experts_shared_kernel(expert_datasets, kappa=2.0, lambdaa=1.0, k
 
 
 
-
+#%%
 '''
 ======== Stochastic variational GP ========
 '''
@@ -273,7 +273,7 @@ def predict_variational_gp(model, likelihood, X_test, batch_size=128):
 
 
 
-
+#%%
 '''
 ====== Training and prediction with batch of independent GPs (i.e. parallel training and prediction) =====
 '''
@@ -341,7 +341,7 @@ def train_and_predict_batched_gp(X_train, y_train, X_test,training_iter=100, lr=
 
 
 
-
+#%%
 '''
 ======= Training and prediction with batch of independent SVGPs =======
 '''
