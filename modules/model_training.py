@@ -1,5 +1,6 @@
-import gpytorch.constraints
 import torch
+torch.set_default_dtype(torch.float64)
+import gpytorch.constraints
 import gpytorch
 from torch.utils.data import TensorDataset, DataLoader
 from gpytorch.models import ApproximateGP
@@ -9,10 +10,11 @@ from gpytorch.mlls import VariationalELBO
 from gpytorch.means import ConstantMean, ZeroMean
 from gpytorch.kernels import ScaleKernel, RBFKernel
 import numpy as np
+from tqdm import tqdm
 
 
 
-def to_torch(x, dtype=torch.float32):
+def to_torch(x, dtype=torch.float64):
     return torch.from_numpy(x).type(dtype)
 
 #%%
@@ -278,9 +280,9 @@ def predict_variational_gp(model, likelihood, X_test, batch_size=128):
 ====== Training and prediction with batch of independent GPs (i.e. parallel training and prediction) =====
 '''
 class BatchGPModel(gpytorch.models.ExactGP):
-    def __init__(self, train_x, train_y, likelihood, kernel):
+    def __init__(self, train_x, train_y, likelihood, mean, kernel):
         super(BatchGPModel, self).__init__(train_x, train_y, likelihood)
-        self.mean_module = gpytorch.means.ZeroMean(batch_shape=torch.Size([train_x.shape[0]]))
+        self.mean_module = mean or gpytorch.means.ConstantMean(batch_shape=torch.Size([train_x.shape[0]]))
         self.covar_module = kernel or gpytorch.kernels.ScaleKernel(
             gpytorch.kernels.RBFKernel(batch_shape=torch.Size([train_x.shape[0]]),
                                        ard_num_dims=train_x.shape[2]),
@@ -294,7 +296,7 @@ class BatchGPModel(gpytorch.models.ExactGP):
     
 
 
-def train_and_predict_batched_gp(X_train, y_train, X_test,training_iter=100, lr=0.1, kernel = None):
+def train_and_predict_batched_gp(X_train, y_train, X_test,training_iter=100, lr=0.1, mean = None,kernel = None):
     likelihood = gpytorch.likelihoods.GaussianLikelihood(
         noise_constraint=gpytorch.constraints.GreaterThan(1e-4)
         )
@@ -308,7 +310,7 @@ def train_and_predict_batched_gp(X_train, y_train, X_test,training_iter=100, lr=
     assert y_train.ndim == 2
     assert X_test.ndim == 3
 
-    model = BatchGPModel(X_train, y_train, likelihood, kernel)
+    model = BatchGPModel(X_train, y_train, likelihood, mean,kernel)
 
     model.train()
     likelihood.train()
@@ -319,7 +321,8 @@ def train_and_predict_batched_gp(X_train, y_train, X_test,training_iter=100, lr=
     # "Loss" for GPs - the marginal log likelihood
     mll = gpytorch.mlls.ExactMarginalLogLikelihood(likelihood, model)
 
-    for i in range(training_iter):
+    loss_vals = []
+    for i in tqdm(range(training_iter)):
         # Zero gradients from previous iteration
         optimizer.zero_grad()
         # Output from model
@@ -329,6 +332,8 @@ def train_and_predict_batched_gp(X_train, y_train, X_test,training_iter=100, lr=
         loss.backward()
         optimizer.step()
 
+        loss_vals.append(loss.item())
+
 
     model.eval()
     likelihood.eval()
@@ -336,7 +341,7 @@ def train_and_predict_batched_gp(X_train, y_train, X_test,training_iter=100, lr=
         preds = likelihood(model(X_test))
         preds_prior = likelihood(model.forward(X_test))
 
-    return preds, preds_prior
+    return preds, preds_prior,loss_vals
 
 
 
